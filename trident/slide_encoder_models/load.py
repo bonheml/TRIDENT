@@ -1,5 +1,6 @@
 import sys
 import os
+import json
 import torch
 import traceback
 from abc import abstractmethod
@@ -43,7 +44,8 @@ slide_to_patch_encoder_name = {
     'chief': 'ctranspath',
     'gigapath': 'gigapath',
     'madeleine': 'conch_v1',
-    'feather': 'conch_v15'
+    'feather': 'conch_v15',
+    'tangle_v2': 'uni_v1',
 }
 
 
@@ -505,6 +507,95 @@ class FeatherSlideEncoder(BaseSlideEncoder):
         return z
 
 
+class Tanglev2SlideEncoder(BaseSlideEncoder):
+
+    def __init__(self, **build_kwargs):
+        """
+        Tangle initialization.
+        """
+        super().__init__(**build_kwargs)
+
+    def _build(self, pretrained=True):
+        self.enc_name = 'tangle_v2'
+        weights_path = get_weights_path('slide', self.enc_name)
+
+        # Ensure model can be built.
+        try:
+            sys.path.append(weights_path)
+            from core.models.mmssl import MMSSL
+        except Exception:
+            traceback.print_exc()
+            raise Exception(
+                f"\nError: Unable to import the TANGLE repository from '{weights_path}'.\n\n"
+                "To resolve this issue:\n"
+                "1. Ensure you have cloned the TANGLE repository to a convenient location:\n"
+                "   `git clone https://github.com/mahmoodlab/TANGLE/`\n"
+                "2. Set the path to TANGLE repo in `trident/slide_encoder_models/load_ckpts.json`, e.g., `./TANGLE`.\n"
+                "3. Verify that TANGLE dependencies are installed:\n"
+                "   In the TANGLE folder `pip install -r requirements.txt`\n\n"
+            )
+
+        # Ensure weights can be loaded.
+        try:
+            current_wd = os.getcwd()  # Get current working directory
+            os.chdir(weights_path)  # Change to TANGLE repo directory
+            os.makedirs(os.path.join(weights_path, "model_weight"), exist_ok=True)
+
+            required_files = {
+                "config.json": "https://drive.google.com/drive/folders/1paUd4Ak02YSsVo7s7gnpwzgrHxkmkhC7",
+                "model.pt": "https://drive.google.com/drive/folders/1paUd4Ak02YSsVo7s7gnpwzgrHxkmkhC7",
+            }
+
+            for file_name, download_link in required_files.items():
+                file_path = os.path.join(weights_path, "model_weight", file_name)
+                if not os.path.exists(file_path):
+                    raise Exception(
+                        f"\nError: Missing required file '{file_name}'.\n\n"
+                        "To resolve this issue:\n"
+                        f"1. Download the file from:\n   {download_link}\n"
+                        f"2. Copy '{file_name}' to the following directory:\n   {file_path}\n\n"
+                        "Ensure the file is correctly placed before retrying."
+                    )
+
+            print("All necessary files are present. TANGLE setup is complete!")
+
+        except Exception as e:
+            print("\nAn error occurred during TANGLE setup:")
+            traceback.print_exc()
+            raise e
+
+        # Load the model config
+        args = json.load(open(os.path.join(weights_path, "model_weight", "config.json"), "r"))
+        # Fixes dimensionality mismatch during model initialisation due to the study name not matching
+        # https://github.com/mahmoodlab/TANGLE/blob/266a756a2574e18baab0b56a6809b5b274d48f14/core/models/mmssl.py#L74
+        args["study"] = "tanglev2"
+        # Fixes discrepancy between and code name for the number of tokens. It is token_size in config but n_tokens in
+        # https://github.com/mahmoodlab/TANGLE/blob/266a756a2574e18baab0b56a6809b5b274d48f14/core/models/mmssl.py#L20
+        args["n_tokens"] = args.pop("token_size")
+        model = MMSSL(config=args, n_tokens_rna=int(args["rna_token_dim"]))
+
+        # Load pretrained weights
+        if pretrained:
+            td = torch.load(os.path.join('model_weight', 'model.pt'), weights_only=True)
+            # Remove prefix `module.` if it exists as done in
+            # https://github.com/mahmoodlab/TANGLE/blob/266a756a2574e18baab0b56a6809b5b274d48f14/extract_slide_embeddings_from_checkpoint.py#L43
+            td = {k.removeprefix("module."): v for k, v in td.items()}
+            model = model.load_state_dict(td, strict=True)
+
+        # Return to original working directory
+        os.chdir(current_wd)
+
+        precision = torch.float32
+        # Set the embedding dim to hidden_dim, as done in
+        # https://github.com/mahmoodlab/TANGLE/blob/266a756a2574e18baab0b56a6809b5b274d48f14/core/models/mmssl.py#L74
+        embedding_dim = args["hidden_dim"]
+        return model, precision, embedding_dim
+
+    def forward(self, batch, device='cuda'):
+        z = self.model.get_features(batch['features'].to(device))
+        return z
+
+
 class MeanSlideEncoder(BaseSlideEncoder):
 
     def __init__(self, **build_kwargs):
@@ -577,6 +668,7 @@ encoder_registry = {
     'madeleine': MadeleineSlideEncoder,
     'feather': FeatherSlideEncoder,
     'abmil': ABMILSlideEncoder,
+    'tangle_v2': Tanglev2SlideEncoder,
 
     # Mean encoders
     'mean-conch_v1': MeanSlideEncoder,
