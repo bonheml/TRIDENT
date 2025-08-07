@@ -235,10 +235,25 @@ class PRISMSlideEncoder(BaseSlideEncoder):
                 "and ensure Python version is 3.10 or above."
             )
 
-        if pretrained:
-            model = AutoModel.from_pretrained('paige-ai/Prism', trust_remote_code=True)
+        weights_path = self._get_weights_path()
+
+        if weights_path:
+            if pretrained:
+                model = AutoModel.from_pretrained(weights_path, trust_remote_code=True)
+            else:
+                model = AutoModel.from_config(AutoConfig.from_pretrained(weights_path))
         else:
-            model = AutoModel.from_config(AutoConfig.from_pretrained('paige-ai/Prism'))
+            self.ensure_has_internet(self.enc_name)
+            try:
+                if pretrained:
+                    model = AutoModel.from_pretrained('paige-ai/Prism', trust_remote_code=True)
+                else:
+                    model = AutoModel.from_config(AutoConfig.from_pretrained('paige-ai/Prism'))
+            except:
+                traceback.print_exc()
+                raise Exception(
+                    "Failed to download PRISM model, make sure that you were granted access and that you correctly registered your token")
+
         model.text_decoder = None
         precision = torch.float16
         embedding_dim = 1280
@@ -248,7 +263,7 @@ class PRISMSlideEncoder(BaseSlideEncoder):
         # input should be of shape (batch_size, tile_seq_len, tile_embed_dim)
         x = batch['features'].to(device)
         z = self.model.slide_representations(x)
-        z = z['image_embedding'] 
+        z = z['image_embedding']
         return z
     
 
