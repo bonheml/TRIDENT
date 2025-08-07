@@ -435,12 +435,17 @@ class FeatherSlideEncoder(BaseSlideEncoder):
         from transformers import AutoModel 
         from huggingface_hub import snapshot_download
 
-        model_path = snapshot_download(
-            repo_id="MahmoodLab/abmil.base.conch_v15.pc108-24k",
-            revision="main",
-            allow_patterns=["*.py", "model.safetensors", "config.json"]
-        )
-        model = AutoModel.from_pretrained(model_path, trust_remote_code=True)
+        weights_path = self._get_weights_path()
+        if weights_path:
+            model = AutoModel.from_pretrained(weights_path, trust_remote_code=True)
+        else:
+            self.ensure_has_internet(self.enc_name)
+            model_path = snapshot_download(
+                repo_id="MahmoodLab/abmil.base.conch_v15.pc108-24k",
+                revision="main",
+                allow_patterns=["*.py", "model.safetensors", "config.json"]
+            )
+            model = AutoModel.from_pretrained(model_path, trust_remote_code=True)
         precision = torch.float32
         embedding_dim = 512
 
