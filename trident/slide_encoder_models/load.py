@@ -526,7 +526,7 @@ class Tanglev2SlideEncoder(BaseSlideEncoder):
             # Remove prefix `module.` if it exists as done in
             # https://github.com/mahmoodlab/TANGLE/blob/266a756a2574e18baab0b56a6809b5b274d48f14/extract_slide_embeddings_from_checkpoint.py#L43
             td = {k.removeprefix("module."): v for k, v in td.items()}
-            model = model.load_state_dict(td, strict=True)
+            model.load_state_dict(td, strict=True)
 
         # Return to original working directory
         os.chdir(current_wd)
