@@ -522,7 +522,7 @@ class Tanglev2SlideEncoder(BaseSlideEncoder):
 
         # Load pretrained weights
         if pretrained:
-            td = torch.load(os.path.join('model_weight', 'model.pt'), weights_only=True)
+            td = torch.load(os.path.join('model_weight', 'model.pt'), map_location='cpu', weights_only=True)
             # Remove prefix `module.` if it exists as done in
             # https://github.com/mahmoodlab/TANGLE/blob/266a756a2574e18baab0b56a6809b5b274d48f14/extract_slide_embeddings_from_checkpoint.py#L43
             td = {k.removeprefix("module."): v for k, v in td.items()}
