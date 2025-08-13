@@ -1,6 +1,7 @@
 from __future__ import annotations
 import os
 import sys
+import torch.nn
 from tqdm import tqdm
 from typing import Optional, List, Dict, Any
 from inspect import signature
@@ -655,6 +656,291 @@ class Processor:
                 else:
                     raise e
         
+        return os.path.join(self.job_dir, saveto)
+
+    def run_slide_explainability_job(
+            self,
+            slide_encoder: torch.nn.Module,
+            coords_dir: str,
+            weights_dir: str,
+            device: str = 'cuda',
+            batch_limit: int = 512,
+            saveas: str = 'h5',
+            saveto: str | None = None,
+            dt_name: str = '',
+    ) -> str:
+        """
+        Extract slide-level relevancy scores from whole-slide images (WSIs) using a specified slide encoder.
+
+        This function computes relevancy scores for WSIs by first ensuring that weights and patch-level features
+        required for the slide encoder are available. If patch features are missing, they are
+        extracted using an appropriate patch encoder automatically inferred. The extracted slide relevancy scores are saved in
+        the specified format and directory.
+
+        Args:
+            slide_encoder (torch.nn.Module): The slide encoder model used for generating slide-level
+                features from patch-level features.
+            coords_dir (str): Directory containing coordinates and features required for processing WSIs.
+            weights_dir (str): Directory containing the slide weights.
+            device (str, optional): Device to use for computations (e.g., 'cuda', 'cpu'). Defaults to 'cuda'.
+            batch_limit (int, optional): Maximum number of features processed in a batch during patch
+                feature extraction. Defaults to 512.
+            saveas (str, optional): File format to save slide features (e.g., 'h5'). Defaults to 'h5'.
+            saveto (str | None, optional): Directory to save extracted slide features. If None, the
+                directory is auto-generated based on `coords_dir` and `slide_encoder`. Defaults to None.
+            dt_name (str, optional): Name of the downstream task to explain. Defaults to ''.
+
+        Returns:
+            str: The absolute path to where the slide relevancy scores are saved.
+
+        Workflow:
+            1. Verify the compatibility of the slide encoder and patch features.
+            2. Check if patch-level features are already extracted for all WSIs. If not, extract them.
+            3. Save the configuration for slide relevancy scores extraction to maintain reproducibility.
+            4. Process each WSI:
+                - Skip if patch features required for the WSI are missing.
+                - Skip if weights required for the WSI are missing.
+                - Extract relevancy scores, ensuring proper synchronization in multiprocessing setups.
+            5. Log the progress and errors during processing.
+
+        Notes:
+            - Patch features are expected in a specific directory structure under `coords_dir`.
+            - Relevancy scores are saved in the format specified by `saveas`.
+            - Errors can be optionally skipped based on the `self.skip_errors` attribute.
+            - Slide relevancy scores must be computed before patch relevancy scores.
+
+        Raises:
+            Exception: Propagates exceptions unless `self.skip_errors` is set to True.
+
+        """
+        from trident.slide_encoder_models.load import slide_to_patch_encoder_name
+
+        if slide_encoder.enc_name.startswith('mean-'):
+            slide_to_patch_encoder_name[slide_encoder.enc_name] = slide_encoder.enc_name.split('mean-')[
+                1]  # e.g. mean-resnet18 -> resnet18
+
+        # Setting I/O
+        mustbe_patch_encoder = slide_to_patch_encoder_name[slide_encoder.enc_name]
+        patch_features_dir = os.path.join(coords_dir, f'explainability_{mustbe_patch_encoder}')
+        if saveto is None:
+            saveto = os.path.join(coords_dir, f'slide_explainability_{slide_encoder.enc_name}_{dt_name}')
+        os.makedirs(os.path.join(self.job_dir, saveto), exist_ok=True)
+
+        # Run patch feature extraction if some patch features are missing:
+        already_processed = []
+        if os.path.isdir(os.path.join(self.job_dir, patch_features_dir)):
+            already_processed = [os.path.splitext(x)[0] for x in
+                                 os.listdir(os.path.join(self.job_dir, patch_features_dir)) if x.endswith(saveas)]
+            wsi_names = [slide.name for slide in self.wsis]
+            already_processed = [x for x in already_processed if x in wsi_names]
+        if len(already_processed) < len(self.wsis):
+            print(
+                f"[PROCESSOR] Some patch features haven't been extracted in {len(already_processed)}/{len(self.wsis)} WSIs. Starting extraction.")
+            from trident.patch_encoder_models.load import encoder_factory
+            patch_encoder = encoder_factory(slide_to_patch_encoder_name[slide_encoder.enc_name])
+            self.run_patch_feature_extraction_job(
+                coords_dir=coords_dir,
+                patch_encoder=patch_encoder,
+                device=device,
+                saveas='h5',  # must use h5 to run slide extraction later to get coords.
+                batch_limit=batch_limit,
+            )
+
+        sig = signature(self.run_slide_explainability_job)
+        local_attrs = {k: v for k, v in locals().items() if k in sig.parameters}
+        self.save_config(
+            saveto=os.path.join(self.job_dir, coords_dir, f'_config_slide_explainability_{slide_encoder.enc_name}_{dt_name}.json'),
+            local_attrs=local_attrs,
+            ignore=['loop', 'valid_slides', 'wsis']
+        )
+
+        self.loop = tqdm(self.wsis, desc=f'Extracting slide relevancy scores using {slide_encoder.enc_name}',
+                         total=len(self.wsis))
+        for wsi in self.loop:
+            # Check if slide features already exist
+            slide_relevancy_path = os.path.join(self.job_dir, saveto, f'{wsi.name}.{saveas}')
+            if os.path.exists(slide_relevancy_path) and not is_locked(slide_relevancy_path):
+                self.loop.set_postfix_str(f'Slide relevancy score already extracted for {wsi.name}. Skipping...')
+                update_log(os.path.join(self.job_dir, coords_dir, f'_logs_slide_explainability_{slide_encoder.enc_name}_{dt_name}.txt'),
+                           f'{wsi.name}{wsi.ext}', 'Slide relevancy score extracted.')
+                continue
+
+            # Check if patch features exist
+            patch_features_path = os.path.join(self.job_dir, patch_features_dir, f'{wsi.name}.h5')
+            if not os.path.exists(patch_features_path):
+                self.loop.set_postfix_str(f'Patch features not found for {wsi.name}. Skipping...')
+                update_log(os.path.join(self.job_dir, coords_dir, f'_logs_slide_explainability_{slide_encoder.enc_name}_{dt_name}.txt'),
+                           f'{wsi.name}{wsi.ext}', 'Patch features not found.')
+                continue
+
+            # Check if weights exist
+            weights_path = os.path.join(self.job_dir, weights_dir, f'{wsi.name}.h5')
+            if not os.path.exists(weights_path):
+                self.loop.set_postfix_str(f'Weights not found for {wsi.name}. Skipping...')
+                update_log(os.path.join(self.job_dir, coords_dir,
+                                        f'_logs_patch_explainability_{slide_encoder.enc_name}_{dt_name}.txt'),
+                           f'{wsi.name}{wsi.ext}', 'Weights not found.')
+                continue
+
+            # Check if another process has claimed this slide
+            if is_locked(slide_relevancy_path):
+                self.loop.set_postfix_str(f'{wsi.name} is locked. Skipping...')
+                continue
+
+            try:
+                self.loop.set_postfix_str(f'Extracting slide relevancy scores for {wsi.name}{wsi.ext}')
+                create_lock(slide_relevancy_path)
+                update_log(os.path.join(self.job_dir, coords_dir, f'_logs_slide_explainability_{slide_encoder.enc_name}_{dt_name}.txt'),
+                           f'{wsi.name}{wsi.ext}', 'LOCKED. Extracting slide relevancy scores...')
+
+                # TODO: update this with the proper parameters once dev
+                # Call the explain_slide method
+                wsi.explain_slide(
+                    patch_features_path=patch_features_path,
+                    weights_path=weights_path,
+                    slide_encoder=slide_encoder,
+                    device=device,
+                    save_relevancy_scores=os.path.join(self.job_dir, saveto)
+                )
+
+                remove_lock(slide_relevancy_path)
+                update_log(os.path.join(self.job_dir, coords_dir, f'_logs_slide_explainability_{slide_encoder.enc_name}_{dt_name}.txt'),
+                           f'{wsi.name}{wsi.ext}', 'Slide features extracted.')
+            except Exception as e:
+                if isinstance(e, KeyboardInterrupt):
+                    remove_lock(slide_relevancy_path)
+                if self.skip_errors:
+                    update_log(
+                        os.path.join(self.job_dir, coords_dir, f'_logs_slide_explainability_{slide_encoder.enc_name}_{dt_name}.txt'),
+                        f'{wsi.name}{wsi.ext}', f'ERROR: {e}')
+                    continue
+                else:
+                    raise e
+
+        return os.path.join(self.job_dir, saveto)
+
+    def run_patch_explainability_job(
+            self,
+            coords_dir: str,
+            weights_dir: str,
+            patch_encoder: torch.nn.Module,
+            device: str,
+            saveas: str = 'h5',
+            batch_limit: int = 512,
+            saveto: str | None = None,
+            dt_name: str = ''
+    ) -> str:
+        """
+        The `run_patch_explainability_job` function computes relevancy scores of patches generated during the
+        patching step. These scores are extracted by backpropagation of the product of the deep learning model output
+        the provided weights for each given patch. The result are then saved in a specified format.
+        This step is used after explainability jobs performed at slide level and uses the slides' relevancy scores as weights.
+
+        Parameters:
+            coords_dir (str):
+                Path to the directory containing patch coordinates, which are used to locate patches for feature extraction.
+            weights_dir (str):
+                Path to the directory containing the patch weights.
+            patch_encoder (torch.nn.Module):
+                A pre-trained PyTorch model used to compute features from the extracted patches.
+            device (str):
+                The computation device to use (e.g., 'cuda:0' for GPU or 'cpu' for CPU).
+            saveas (str, optional):
+                The format in which extracted features are saved. Can be 'h5' or 'pt'. Defaults to 'h5'.
+            batch_limit (int, optional):
+                The maximum number of patches processed in a single batch. Defaults to 512.
+            saveto (str, optional):
+                Directory where the extracted features will be saved. If not provided, a directory name will
+                be generated automatically. Defaults to None.
+            dt_name (str, optional):
+                Name of the downstream task to explain. Defaults to ''.
+
+        Returns:
+            str: The absolute path to where the relevancy scores are saved.
+
+        Example
+        -------
+        Extract relevancy scores from patches using a pre-trained encoder:
+
+        >>> from models import PatchEncoder
+        >>> encoder = PatchEncoder()
+        >>> processor.run_patch_explainability_job(
+        ...     coords_dir="output/patch_coords/",
+        ...     weights_dir="output/patch_weights/",
+        ...     patch_encoder=encoder,
+        ...     device="cuda:0"
+        ... )
+        """
+        if saveto is None:
+            saveto = os.path.join(coords_dir, f'explainability_{patch_encoder.enc_name}_{dt_name}')
+
+        os.makedirs(os.path.join(self.job_dir, saveto), exist_ok=True)
+
+        sig = signature(self.run_patch_explainability_job)
+        local_attrs = {k: v for k, v in locals().items() if k in sig.parameters}
+        self.save_config(
+            saveto=os.path.join(self.job_dir, coords_dir, f'_config_patch_explainability_{patch_encoder.enc_name}_{dt_name}.json'),
+            local_attrs=local_attrs,
+            ignore=['patch_encoder', 'loop', 'valid_slides', 'wsis']
+        )
+
+        log_fp = os.path.join(self.job_dir, coords_dir, f'_logs_patch_explainability_{patch_encoder.enc_name}_{dt_name}.txt')
+        self.loop = tqdm(self.wsis, desc=f'Extracting relevancy scores from coords in {coords_dir}', total=len(self.wsis))
+        for wsi in self.loop:
+            wsi_feats_fp = os.path.join(self.job_dir, saveto, f'{wsi.name}.{saveas}')
+            # Check if features already exist
+            if os.path.exists(wsi_feats_fp) and not is_locked(wsi_feats_fp):
+                self.loop.set_postfix_str(f'Relevancy scores already extracted for {wsi}. Skipping...')
+                update_log(log_fp, f'{wsi.name}{wsi.ext}', 'Relevancy scores.')
+                continue
+
+            # Check if coords exist
+            coords_path = os.path.join(self.job_dir, coords_dir, 'patches', f'{wsi.name}_patches.h5')
+            if not os.path.exists(coords_path):
+                self.loop.set_postfix_str(f'Coords not found for {wsi.name}. Skipping...')
+                update_log(log_fp, f'{wsi.name}{wsi.ext}', 'Coords not found.')
+                continue
+
+            # Check if weights exist
+            weights_path = os.path.join(self.job_dir, weights_dir, f'{wsi.name}.h5')
+            if not os.path.exists(weights_path):
+                self.loop.set_postfix_str(f'Weights not found for {wsi.name}. Skipping...')
+                update_log(log_fp, f'{wsi.name}{wsi.ext}', 'Weights not found.')
+                continue
+
+            # Check if another process has claimed this slide
+            if is_locked(wsi_feats_fp):
+                self.loop.set_postfix_str(f'{wsi.name} is locked. Skipping...')
+                continue
+
+            try:
+                self.loop.set_postfix_str(f'Extracting relevancy scores from {wsi.name}{wsi.ext}')
+                create_lock(wsi_feats_fp)
+                update_log(log_fp, f'{wsi.name}{wsi.ext}', 'LOCKED. Extracting relevancy scores...')
+
+                # TODO: Update this with the proper signature once dev
+                wsi.explain_patches(
+                    patch_encoder=patch_encoder,
+                    coords_path=coords_path,
+                    weights_path=weights_path,
+                    save_features=os.path.join(self.job_dir, saveto),
+                    device=device,
+                    saveas=saveas,
+                    batch_limit=batch_limit
+                )
+
+                remove_lock(wsi_feats_fp)
+                update_log(log_fp, f'{wsi.name}{wsi.ext}', 'Relevancy scores extracted.')
+            except Exception as e:
+                if isinstance(e, KeyboardInterrupt):
+                    remove_lock(wsi_feats_fp)
+                if self.skip_errors:
+                    update_log(log_fp, f'{wsi.name}{wsi.ext}', f'ERROR: {e}')
+                    continue
+                else:
+                    raise e
+
+        # Return the directory where the features are saved
         return os.path.join(self.job_dir, saveto)
 
     def save_config(

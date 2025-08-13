@@ -24,8 +24,8 @@ def build_parser():
     # Generic arguments 
     parser.add_argument('--gpu', type=int, default=0, help='GPU index to use for processing tasks.')
     parser.add_argument('--task', type=str, default='seg', 
-                        choices=['seg', 'coords', 'feat', 'all'], 
-                        help='Task to run: seg (segmentation), coords (save tissue coordinates), img (save tissue images), feat (extract features).')
+                        choices=['seg', 'coords', 'feat', 'all', 'explain'],
+                        help='Task to run: seg (segmentation), coords (save tissue coordinates), img (save tissue images), feat (extract features), explain (compute relevancy scores).')
     parser.add_argument('--job_dir', type=str, required=True, help='Directory to store outputs.')
     parser.add_argument('--skip_errors', action='store_true', default=False, 
                         help='Skip errored slides and continue processing.')
@@ -106,6 +106,12 @@ def build_parser():
                         help='Slide encoder to use')
     parser.add_argument('--feat_batch_size', type=int, default=None, 
                         help='Batch size for feature extraction. Defaults to None (use `batch_size` argument instead).')
+
+    # Explainability jobs arguments
+    parser.add_argument('--weights_dir', type=str, default=None,
+                        help='Directory containing the weights to use for explainability jobs.')
+    parser.add_argument('--dt_name', type=str, default='',
+                        help='Name of the downstream task to explain')
     return parser
 
 
@@ -200,6 +206,31 @@ def run_task(processor, args):
                 device=f'cuda:{args.gpu}',
                 saveas='h5',
                 batch_limit=args.feat_batch_size if args.feat_batch_size is not None else args.batch_size,
+            )
+    elif args.task == 'explain':
+        if args.slide_encoder is None:
+            from trident.patch_encoder_models.load import encoder_factory
+            encoder = encoder_factory(args.patch_encoder, weights_path=args.patch_encoder_ckpt_path)
+            processor.run_patch_explainability_job(
+                coords_dir=args.coords_dir or f'{args.mag}x_{args.patch_size}px_{args.overlap}px_overlap',
+                weights_dir=args.weights_dir,
+                patch_encoder=encoder,
+                device=f'cuda:{args.gpu}',
+                saveas='h5',
+                batch_limit=args.feat_batch_size if args.feat_batch_size is not None else args.batch_size,
+                dt_name=args.dt_name,
+            )
+        else:
+            from trident.slide_encoder_models.load import encoder_factory
+            encoder = encoder_factory(args.slide_encoder)
+            processor.run_slide_explainability_job(
+                slide_encoder=encoder,
+                coords_dir=args.coords_dir or f'{args.mag}x_{args.patch_size}px_{args.overlap}px_overlap',
+                weights_dir=args.weights_dir,
+                device=f'cuda:{args.gpu}',
+                saveas='h5',
+                batch_limit=args.feat_batch_size if args.feat_batch_size is not None else args.batch_size,
+                dt_name=args.dt_name,
             )
     else:
         raise ValueError(f'Invalid task: {args.task}')

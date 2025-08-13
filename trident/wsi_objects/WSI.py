@@ -1,4 +1,6 @@
 from __future__ import annotations
+
+import h5py
 from abc import abstractmethod
 import numpy as np
 from PIL import Image
@@ -9,6 +11,7 @@ from typing import List, Tuple, Optional, Literal, Union
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
+from trident.Explainer import VITAttentionGradRollout
 from trident.segmentation_models.load import SegmentationModel
 from trident.wsi_objects.WSIPatcher import *
 from trident.wsi_objects.WSIPatcherDataset import WSIPatcherDataset
@@ -945,6 +948,250 @@ class WSI:
                     mode='w')
 
         return save_path
+
+
+    @torch.inference_mode()
+    def explain_slide(
+            self,
+            patch_features_path: str,
+            weights_path: str,
+            slide_encoder: torch.nn.Module,
+            save_relevancy_scores: str,
+            device: str = 'cuda',
+    ) -> str:
+        """
+        Explain slide-level embeddings produced by a pretrained slide encoder.
+
+        This function processes patch-level features extracted from a whole-slide image (WSI) and
+        generates a single feature vector representing the entire slide. The extracted features are
+        multiplied by the weights (e.g., classification output) in weights_path to create a loss.
+        Relevancy scores are then computed during the backpropagation of this loss.
+        The obtained scores are saved to a specified directory in HDF5 format.
+
+        Args:
+            patch_features_path (str): Path to the HDF5 file containing patch-level features and coordinates.
+            weights_path (str): Path to the HDF5 file containing weights to use for loss computation.
+            slide_encoder (torch.nn.Module): Pretrained slide encoder model for generating slide-level features.
+            save_relevancy_scores (str): Directory where the extracted relevancy scores will be saved.
+            device (str, optional): Device to run computations on (e.g., 'cuda', 'cpu'). Defaults to 'cuda'.
+
+        Returns:
+            str: The absolute path to the slide-level relevancy scores.
+
+        Workflow:
+            1. Load the pretrained slide encoder model and set it to evaluation mode.
+            2. Load patch-level features and corresponding coordinates from the provided HDF5 file.
+            3. Load weights from the provided HDF5 file.
+            3. Convert patch-level features into a tensor and move it to the specified device.
+            4. Generate slide-level features using the slide encoder, with automatic mixed precision if supported.
+            5. Multiply the slide-level features by the weights and compute the relevancy scores during backpropagation.
+            6. Save the slide-level relevancy scores and associated metadata (e.g., coordinates) in an HDF5 file.
+            6. Return the path to the saved slide relevancy scores.
+
+        Notes:
+            - The `patch_features_path` must point to a valid HDF5 file containing datasets named `features` and `coords`.
+            - The `weights_path` must point to a valid HDF5 file containing a dataset named `wsi/weights`.
+            - The saved HDF5 file includes both the slide-level features and metadata such as patch coordinates.
+            - Automatic mixed precision is enabled if the slide encoder supports precision lower than `torch.float32`.
+
+        Raises:
+            FileNotFoundError: If the `patch_features_path` or `weights_path` does not exist.
+            RuntimeError: If there is an issue with the slide encoder or tensor operations.
+
+        Example:
+            >>> relevancy_scores = explain_slide(
+            ...     patch_features_path='path/to/patch_features.h5',
+            ...     weights_path='path/to/weights.h5',
+            ...     slide_encoder=pretrained_model,
+            ...     save_features='output/slide_features',
+            ...     device='cuda'
+            ... )
+            >>> print(relevancy_scores)  # Outputs the path of the relevancy scores.
+        """
+        import h5py
+
+        # Set the slide encoder model to device and eval
+        slide_encoder.to(device)
+        slide_encoder.eval()
+
+        if not slide_encoder.enc_name.startswith('mean-'):
+            attn_grad_rollout = VITAttentionGradRollout(slide_encoder)
+        else:
+            attn_grad_rollout = None
+
+        # Load patch-level features from h5 file
+        with h5py.File(patch_features_path, 'r') as f:
+            coords = f['coords'][:]
+            patch_features = f['features'][:]
+            coords_attrs = dict(f['coords'].attrs)
+
+        # Load weights from h5 file
+        with h5py.File(weights_path, 'r') as f:
+            weights = f['wsi/weights'][:]
+
+        if (len(weights.shape) != 1) or (weights.shape[0] != patch_features.shape[0]):
+            raise AttributeError(f"weights must be a vector of size {slide_encoder.embedding_dim}.")
+        weights = weights.unsqueeze(0)  # Add batch dimension
+
+        # Convert slide_features to tensor
+        patch_features = torch.from_numpy(patch_features).float().to(device)
+        patch_features = patch_features.unsqueeze(0)  # Add batch dimension
+
+        coords = torch.from_numpy(coords).to(device)
+        coords = coords.unsqueeze(0)  # Add batch dimension
+
+        # Prepare input batch dictionary
+        batch = {
+            'features': patch_features,
+            'coords': coords,
+            'attributes': coords_attrs
+        }
+
+        if slide_encoder.enc_name.startswith('mean-'):
+            # Models without attention, just compute the product of weights and slide embeddings
+            output = slide_encoder(batch, device)
+            relevancy_scores = output * weights
+            relevancy_scores = np.tile(relevancy_scores[0], coords.shape[1])
+        else:
+            # Generate slide-level relevancy scores
+            with torch.autocast(device_type='cuda', enabled=(slide_encoder.precision != torch.float32)):
+                relevancy_scores = attn_grad_rollout(batch, weights, device)
+
+        print(relevancy_scores.shape)
+
+        # Save slide-level features if save path is provided
+        os.makedirs(save_relevancy_scores, exist_ok=True)
+        save_path = os.path.join(save_relevancy_scores, f'{self.name}.h5')
+
+        save_h5(os.path.join(save_relevancy_scores, f'{self.name}.h5'),
+                assets={
+                    'relevancy_scores': relevancy_scores,
+                    'coords': coords.cpu().numpy().squeeze(),
+                },
+                attributes={
+                    'relevancy_scores': {'name': self.name, 'savetodir': save_relevancy_scores},
+                    'coords': coords_attrs
+                },
+                mode='w')
+
+        return save_path
+
+    @torch.inference_mode()
+    def explain_patch(
+            self,
+            patch_encoder: torch.nn.Module,
+            coords_path: str,
+            weights_path: str,
+            save_features: str,
+            device: str = 'cuda:0',
+            verbose: bool = False
+    ) -> str:
+        """
+        The `explain_patch` function of the class `WSI` explains patch-level embeddings produced by a pretrained patch encoder.
+        It processes the patches as specified in the coordinates file. The extracted patch features are
+        multiplied by the weights (e.g., classification output) in weights_path to create a loss.
+        Relevancy scores are then computed during the backpropagation of this loss.
+        The obtained scores are saved to a specified directory in HDF5 format.
+
+        Args:
+        patch_encoder : torch.nn.Module
+            The model used for feature extraction.
+        coords_path : str
+            Path to the file containing patch coordinates.
+        weights_path : str
+            Path to the file containing the weights to use for the loss computation.
+        save_features : str
+            Directory path to save the extracted features.
+        device : str, optional
+            Device to run feature extraction on (e.g., 'cuda:0'). Defaults to 'cuda:0'.
+        verbose: bool, optional:
+            Whenever to print patch embedding progress. Defaults to False.
+
+        Returns:
+        str:
+            The absolute path of the file containing the relevancy scores.
+
+        Notes:
+            - The `weights_path` must point to a valid HDF5 file containing a dataset named `relevancy_scores`.
+            - The weights are expected to be the relevancy scores obtained at slide level.
+
+        Example:
+        >>> features_path = wsi.extract_features(patch_encoder, "output_coords/sample_name_patches.h5",
+                                                 "output_weights/weights.h5", "output_relevancy")
+        >>> print(features_path)
+        output_relevancy/sample_name.h5
+        """
+
+        self._lazy_initialize()
+        patch_encoder.to(device)
+        patch_encoder.eval()
+        precision = getattr(patch_encoder, 'precision', torch.float32)
+        patch_transforms = patch_encoder.eval_transforms
+
+        attn_grad_rollout = VITAttentionGradRollout(patch_encoder)
+
+        # Load weights from h5 file
+        with h5py.File(weights_path, 'r') as f:
+            weights = f['relevancy_scores'][:]
+            weights_coords = f['coords'][:]
+
+        try:
+            coords_attrs, coords = read_coords(coords_path)
+            patch_size = coords_attrs.get('patch_size', None)
+            level0_magnification = coords_attrs.get('level0_magnification', None)
+            target_magnification = coords_attrs.get('target_magnification', None)
+            if None in (patch_size, level0_magnification, target_magnification):
+                raise KeyError('Missing attributes in coords_attrs.')
+
+        except (KeyError, FileNotFoundError, ValueError) as e:
+            warnings.warn(f"Cannot read using Trident coords format ({str(e)}). Trying with CLAM/Fishing-Rod.")
+            patcher = WSIPatcher.from_legacy_coords_file(self, coords_path, coords_only=True, pil=True)
+
+        else:
+            patcher = self.create_patcher(
+                patch_size=patch_size,
+                src_mag=level0_magnification,
+                dst_mag=target_magnification,
+                custom_coords=coords,
+                coords_only=False,
+                pil=True,
+            )
+
+        dataset = WSIPatcherDataset(patcher, patch_transforms)
+        dataloader = DataLoader(dataset, batch_size=1,
+                                num_workers=get_num_workers(1, max_workers=self.max_workers),
+                                pin_memory=False)
+
+        dataloader = tqdm(dataloader) if verbose else dataloader
+
+        attn_masks = []
+        for imgs, coords in dataloader:
+            imgs = imgs.to(device)
+            idx = np.where(weights_coords == coords)
+            attn_grad_rollout.reset_attention()
+            with torch.autocast(device_type='cuda', dtype=precision, enabled=(precision != torch.float32)):
+                attn_mask = attn_grad_rollout(imgs, weights[idx])
+            attn_masks.append(attn_mask.cpu().numpy())
+
+        # Concatenate features
+        attn_masks = np.concatenate(attn_masks, axis=0)
+
+        # Save the features to disk
+        os.makedirs(save_features, exist_ok=True)
+
+        model_name = patch_encoder.enc_name if hasattr(patch_encoder, 'enc_name') else None
+        save_h5(os.path.join(save_features, f'{self.name}.h5'),
+                assets={
+                    'relevancy_scores': attn_masks,
+                    'coords': coords,
+                },
+                attributes={
+                    'relevancy_scores': {'name': self.name, 'savetodir': save_features, 'encoder': model_name},
+                    'coords': coords_attrs
+                },
+                mode='w')
+
+        return os.path.join(save_features, f'{self.name}.h5')
 
     def release(self) -> None:
         """
