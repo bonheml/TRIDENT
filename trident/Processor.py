@@ -727,7 +727,9 @@ class Processor:
         os.makedirs(os.path.join(self.job_dir, saveto), exist_ok=True)
 
         if weights_dir is None:
-            weights_dir = os.path.join(self.job_dir, coords_dir, f'slide_contribs_{slide_encoder.enc_name}/{dt_name}')
+            weights_dir = os.path.join(coords_dir, f'slide_contribs_{slide_encoder.enc_name}/{dt_name}')
+
+        log_fp = os.path.join(self.job_dir, coords_dir, f'_logs_slide_explainability_{slide_encoder.enc_name}_{dt_name}.txt')
 
         # Run patch feature extraction if some patch features are missing:
         already_processed = []
@@ -764,25 +766,21 @@ class Processor:
             slide_relevancy_path = os.path.join(self.job_dir, saveto, f'{wsi.name}.{saveas}')
             if os.path.exists(slide_relevancy_path) and not is_locked(slide_relevancy_path):
                 self.loop.set_postfix_str(f'Slide relevancy score already extracted for {wsi.name}. Skipping...')
-                update_log(os.path.join(self.job_dir, coords_dir, f'_logs_slide_explainability_{slide_encoder.enc_name}_{dt_name}.txt'),
-                           f'{wsi.name}{wsi.ext}', 'Slide relevancy score extracted.')
+                update_log(log_fp, f'{wsi.name}{wsi.ext}', 'Slide relevancy score extracted.')
                 continue
 
             # Check if patch features exist
             patch_features_path = os.path.join(self.job_dir, patch_features_dir, f'{wsi.name}.h5')
             if not os.path.exists(patch_features_path):
                 self.loop.set_postfix_str(f'Patch features not found for {wsi.name}. Skipping...')
-                update_log(os.path.join(self.job_dir, coords_dir, f'_logs_slide_explainability_{slide_encoder.enc_name}_{dt_name}.txt'),
-                           f'{wsi.name}{wsi.ext}', 'Patch features not found.')
+                update_log(log_fp, f'{wsi.name}{wsi.ext}', 'Patch features not found.')
                 continue
 
             # Check if weights exist
             weights_path = os.path.join(self.job_dir, weights_dir, f'{wsi.name}.h5')
             if not os.path.exists(weights_path):
                 self.loop.set_postfix_str(f'Weights not found for {wsi.name}. Skipping...')
-                update_log(os.path.join(self.job_dir, coords_dir,
-                                        f'_logs_patch_explainability_{slide_encoder.enc_name}_{dt_name}.txt'),
-                           f'{wsi.name}{wsi.ext}', 'Weights not found.')
+                update_log(log_fp,f'{wsi.name}{wsi.ext}', 'Weights not found.')
                 continue
 
             # Check if another process has claimed this slide
@@ -793,8 +791,7 @@ class Processor:
             try:
                 self.loop.set_postfix_str(f'Extracting slide relevancy scores for {wsi.name}{wsi.ext}')
                 create_lock(slide_relevancy_path)
-                update_log(os.path.join(self.job_dir, coords_dir, f'_logs_slide_explainability_{slide_encoder.enc_name}_{dt_name}.txt'),
-                           f'{wsi.name}{wsi.ext}', 'LOCKED. Extracting slide relevancy scores...')
+                update_log(log_fp,f'{wsi.name}{wsi.ext}', 'LOCKED. Extracting slide relevancy scores...')
 
                 # Call the explain_slide method
                 wsi.explain_slide(
@@ -806,15 +803,12 @@ class Processor:
                 )
 
                 remove_lock(slide_relevancy_path)
-                update_log(os.path.join(self.job_dir, coords_dir, f'_logs_slide_explainability_{slide_encoder.enc_name}_{dt_name}.txt'),
-                           f'{wsi.name}{wsi.ext}', 'Slide features extracted.')
+                update_log(log_fp, f'{wsi.name}{wsi.ext}', 'Slide features extracted.')
             except Exception as e:
                 if isinstance(e, KeyboardInterrupt):
                     remove_lock(slide_relevancy_path)
                 if self.skip_errors:
-                    update_log(
-                        os.path.join(self.job_dir, coords_dir, f'_logs_slide_explainability_{slide_encoder.enc_name}_{dt_name}.txt'),
-                        f'{wsi.name}{wsi.ext}', f'ERROR: {e}')
+                    update_log(log_fp, f'{wsi.name}{wsi.ext}', f'ERROR: {e}')
                     continue
                 else:
                     raise e
@@ -879,7 +873,7 @@ class Processor:
         os.makedirs(os.path.join(self.job_dir, saveto), exist_ok=True)
 
         if weights_dir is None:
-            weights_dir = os.path.join(self.job_dir, coords_dir, f'slide_explainability_{slide_enc_name}_{dt_name}')
+            weights_dir = os.path.join(coords_dir, f'slide_explainability_{slide_enc_name}_{dt_name}')
 
         sig = signature(self.run_patch_explainability_job)
         local_attrs = {k: v for k, v in locals().items() if k in sig.parameters}
