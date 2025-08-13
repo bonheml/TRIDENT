@@ -793,7 +793,6 @@ class Processor:
                 update_log(os.path.join(self.job_dir, coords_dir, f'_logs_slide_explainability_{slide_encoder.enc_name}_{dt_name}.txt'),
                            f'{wsi.name}{wsi.ext}', 'LOCKED. Extracting slide relevancy scores...')
 
-                # TODO: update this with the proper parameters once dev
                 # Call the explain_slide method
                 wsi.explain_slide(
                     patch_features_path=patch_features_path,
@@ -918,15 +917,12 @@ class Processor:
                 create_lock(wsi_feats_fp)
                 update_log(log_fp, f'{wsi.name}{wsi.ext}', 'LOCKED. Extracting relevancy scores...')
 
-                # TODO: Update this with the proper signature once dev
                 wsi.explain_patches(
                     patch_encoder=patch_encoder,
                     coords_path=coords_path,
                     weights_path=weights_path,
                     save_features=os.path.join(self.job_dir, saveto),
-                    device=device,
-                    saveas=saveas,
-                    batch_limit=batch_limit
+                    device=device
                 )
 
                 remove_lock(wsi_feats_fp)
