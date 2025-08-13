@@ -112,6 +112,8 @@ def build_parser():
                         help='Directory containing the weights to use for explainability jobs.')
     parser.add_argument('--dt_name', type=str, default='',
                         help='Name of the downstream task to explain')
+    parser.add_argument('--slide_enc_name', type=str, default='',
+                        help='Name of the slide encoder used to generate slide-level relevancy scores.')
     return parser
 
 

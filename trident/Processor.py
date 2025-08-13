@@ -662,10 +662,10 @@ class Processor:
             self,
             slide_encoder: torch.nn.Module,
             coords_dir: str,
-            weights_dir: str,
             device: str = 'cuda',
             batch_limit: int = 512,
             saveas: str = 'h5',
+            weights_dir: str | None = None,
             saveto: str | None = None,
             dt_name: str = '',
     ) -> str:
@@ -725,6 +725,9 @@ class Processor:
         if saveto is None:
             saveto = os.path.join(coords_dir, f'slide_explainability_{slide_encoder.enc_name}_{dt_name}')
         os.makedirs(os.path.join(self.job_dir, saveto), exist_ok=True)
+
+        if weights_dir is None:
+            saveto = os.path.join(self.job_dir, coords_dir, f'slide_contribs_{slide_encoder.enc_name}/{dt_name}')
 
         # Run patch feature extraction if some patch features are missing:
         already_processed = []
@@ -821,12 +824,13 @@ class Processor:
     def run_patch_explainability_job(
             self,
             coords_dir: str,
-            weights_dir: str,
             patch_encoder: torch.nn.Module,
             device: str,
+            slide_enc_name: str,
             saveas: str = 'h5',
             batch_limit: int = 512,
             saveto: str | None = None,
+            weights_dir: str | None = None,
             dt_name: str = ''
     ) -> str:
         """
@@ -871,19 +875,23 @@ class Processor:
         ... )
         """
         if saveto is None:
-            saveto = os.path.join(coords_dir, f'explainability_{patch_encoder.enc_name}_{dt_name}')
-
+            saveto = os.path.join(coords_dir, f'explainability_{slide_enc_name}_{patch_encoder.enc_name}_{dt_name}')
         os.makedirs(os.path.join(self.job_dir, saveto), exist_ok=True)
+
+        if weights_dir is None:
+            weights_dir = os.path.join(self.job_dir, coords_dir, f'slide_explainability_{slide_enc_name}_{dt_name}')
 
         sig = signature(self.run_patch_explainability_job)
         local_attrs = {k: v for k, v in locals().items() if k in sig.parameters}
+        cfg_fp = os.path.join(self.job_dir, coords_dir, f'_config_patch_explainability_{slide_enc_name}_{patch_encoder.enc_name}_{dt_name}.json')
+        log_fp = os.path.join(self.job_dir, coords_dir, f'_logs_patch_explainability_{slide_enc_name}_{patch_encoder.enc_name}_{dt_name}.txt')
+
         self.save_config(
-            saveto=os.path.join(self.job_dir, coords_dir, f'_config_patch_explainability_{patch_encoder.enc_name}_{dt_name}.json'),
+            saveto= cfg_fp,
             local_attrs=local_attrs,
             ignore=['patch_encoder', 'loop', 'valid_slides', 'wsis']
         )
 
-        log_fp = os.path.join(self.job_dir, coords_dir, f'_logs_patch_explainability_{patch_encoder.enc_name}_{dt_name}.txt')
         self.loop = tqdm(self.wsis, desc=f'Extracting relevancy scores from coords in {coords_dir}', total=len(self.wsis))
         for wsi in self.loop:
             wsi_feats_fp = os.path.join(self.job_dir, saveto, f'{wsi.name}.{saveas}')
