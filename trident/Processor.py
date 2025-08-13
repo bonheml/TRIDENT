@@ -727,7 +727,7 @@ class Processor:
         os.makedirs(os.path.join(self.job_dir, saveto), exist_ok=True)
 
         if weights_dir is None:
-            saveto = os.path.join(self.job_dir, coords_dir, f'slide_contribs_{slide_encoder.enc_name}/{dt_name}')
+            weights_dir = os.path.join(self.job_dir, coords_dir, f'slide_contribs_{slide_encoder.enc_name}/{dt_name}')
 
         # Run patch feature extraction if some patch features are missing:
         already_processed = []
