@@ -721,7 +721,7 @@ class Processor:
 
         # Setting I/O
         mustbe_patch_encoder = slide_to_patch_encoder_name[slide_encoder.enc_name]
-        patch_features_dir = os.path.join(coords_dir, f'explainability_{mustbe_patch_encoder}')
+        patch_features_dir = os.path.join(coords_dir, f'features_{mustbe_patch_encoder}')
         if saveto is None:
             saveto = os.path.join(coords_dir, f'slide_explainability_{slide_encoder.enc_name}_{dt_name}')
         os.makedirs(os.path.join(self.job_dir, saveto), exist_ok=True)
