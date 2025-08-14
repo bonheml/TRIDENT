@@ -2,7 +2,7 @@ import torch
 
 
 class VITAttentionGradRollout:
-    def __init__(self, model, attention_layer_names=('attn_drop', 'out_proj', 'to_out', 'attention_c'), discard_ratio=0.9):
+    def __init__(self, model, attention_layer_names=('attn_drop', 'out_proj', 'to_out', 'attention_a.2', 'attention.b.2'), discard_ratio=0.9):
         """An adaptation of the class proposed by [1] in https://github.com/jacobgil/vit-explain/blob/15a81d355a5aa6128ea4e71bbd56c28888d0f33b/vit_grad_rollout.py#L38
         :param model: the model to explain
         :param attention_layer_names: the name of the attention layers to target, defaults to 'attn_drop'
@@ -29,6 +29,7 @@ class VITAttentionGradRollout:
             for attention_layer_name in attention_layer_names:
                 if attention_layer_name in name:
                     print(f"Registering hooks for layer {name}")
+                    print(f"Module {module}: {name}")
                     self.handles.append(module.register_forward_hook(self.get_attention))
                     self.handles.append(module.register_full_backward_hook(self.get_attention_gradient))
 
@@ -128,11 +129,11 @@ class VITAttentionGradRollout:
         :return: an attention mask to add on the original image
         """
         self.model.zero_grad()
-        output = self.model(input_tensor, device)
+        output = (self.model(input_tensor, device))
+        output.retain_grad()
+        weights.retain_grad()
         assert weights.size() == output.size()
-        print(output.size())
-        loss = (output * weights).sum(axis=1)
-        print(loss)
+        loss = (output * weights).sum()
         loss.backward()
 
         if method == "Gildenblat":
