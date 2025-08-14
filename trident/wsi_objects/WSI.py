@@ -1029,7 +1029,7 @@ class WSI:
         with h5py.File(weights_path, 'r') as f:
             weights = f['wsi/weights'][:]
 
-        if (len(weights.shape) != 1) or (weights.shape[0] != patch_features.shape[0]):
+        if (len(weights.shape) != 1) or (weights.shape[0] != slide_encoder.embedding_dim):
             raise AttributeError(f"weights must be a vector of size {slide_encoder.embedding_dim}.")
         weights = weights.unsqueeze(0)  # Add batch dimension
 
