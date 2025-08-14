@@ -29,7 +29,6 @@ class VITAttentionGradRollout:
             for attention_layer_name in attention_layer_names:
                 if attention_layer_name in name:
                     print(f"Registering hooks for layer {name}")
-                    print(f"Module {module}: {name}")
                     self.handles.append(module.register_forward_hook(self.get_attention))
                     self.handles.append(module.register_full_backward_hook(self.get_attention_gradient))
 
@@ -110,7 +109,6 @@ class VITAttentionGradRollout:
                 # Eq (5) of [1], only positive contribution are kept before averaging
                 attention_heads_fused = (grad * attention).clamp(min=0).mean(axis=1)[0]
                 # Eq (6) of [1], accumulates the matrix relevancy at each layer
-                print(f"result device {result.device}, attention_heads_fused device {attention_heads_fused.device}")
                 result += torch.matmul(attention_heads_fused, result)
         I = torch.eye(result.size(-1)).to(device)
         # compute \hat{R}^{qq} = R^{qq} - I, the matrix created by self-attention aggregation for Eq (9)
