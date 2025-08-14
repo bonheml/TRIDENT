@@ -1056,7 +1056,7 @@ class WSI:
         else:
             # Generate slide-level relevancy scores
             with torch.autocast(device_type='cuda', enabled=(slide_encoder.precision != torch.float32)):
-                relevancy_scores = attn_grad_rollout(batch, weights, device)
+                relevancy_scores = attn_grad_rollout(batch, weights, device=device)
         relevancy_scores = relevancy_scores.cpu().numpy()
         print(relevancy_scores.shape)
 
