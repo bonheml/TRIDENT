@@ -950,7 +950,6 @@ class WSI:
         return save_path
 
 
-    @torch.inference_mode()
     def explain_slide(
             self,
             patch_features_path: str,
@@ -1078,7 +1077,7 @@ class WSI:
 
         return save_path
 
-    @torch.inference_mode()
+
     def explain_patch(
             self,
             patch_encoder: torch.nn.Module,

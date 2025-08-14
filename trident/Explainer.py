@@ -129,9 +129,7 @@ class VITAttentionGradRollout:
         :return: an attention mask to add on the original image
         """
         self.model.zero_grad()
-        output = (self.model(input_tensor, device))
-        output.retain_grad()
-        weights.retain_grad()
+        output = self.model(input_tensor, device)
         assert weights.size() == output.size()
         loss = (output * weights).sum()
         loss.backward()
