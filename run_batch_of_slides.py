@@ -224,7 +224,7 @@ def run_task(processor, args):
             )
         else:
             from trident.slide_encoder_models.load import encoder_factory
-            encoder = encoder_factory(args.slide_encoder)
+            encoder = encoder_factory(args.slide_encoder, freeze=False)
             processor.run_slide_explainability_job(
                 slide_encoder=encoder,
                 coords_dir=args.coords_dir or f'{args.mag}x_{args.patch_size}px_{args.overlap}px_overlap',

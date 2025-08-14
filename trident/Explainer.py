@@ -127,8 +127,6 @@ class VITAttentionGradRollout:
         :param method: the gradient rollout method to use. Can be Gildenblat ou Chefer, defaults to 'Chefer'
         :return: an attention mask to add on the original image
         """
-        for param in self.model.parameters():
-            param.requires_grad = True
         self.model.zero_grad()
         output = self.model(input_tensor, device)
         assert weights.size() == output.size()
