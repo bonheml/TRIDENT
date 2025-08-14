@@ -1031,7 +1031,6 @@ class WSI:
 
         if (len(weights.shape) != 1) or (weights.shape[0] != slide_encoder.embedding_dim):
             raise AttributeError(f"weights must be a vector of size {slide_encoder.embedding_dim}.")
-        weights = weights.unsqueeze(0)  # Add batch dimension
 
         # Convert slide_features to tensor
         patch_features = torch.from_numpy(patch_features).float().to(device)
@@ -1039,6 +1038,9 @@ class WSI:
 
         coords = torch.from_numpy(coords).to(device)
         coords = coords.unsqueeze(0)  # Add batch dimension
+
+        weights = torch.from_numpy(weights).float().to(device)
+        weights = weights.unsqueeze(0) # Add batch dimension
 
         # Prepare input batch dictionary
         batch = {
@@ -1051,6 +1053,7 @@ class WSI:
             # Models without attention, just compute the product of weights and slide embeddings
             output = slide_encoder(batch, device)
             relevancy_scores = output * weights
+            print(relevancy_scores.shape)
             relevancy_scores = np.tile(relevancy_scores[0], coords.shape[1])
         else:
             # Generate slide-level relevancy scores
