@@ -1052,13 +1052,13 @@ class WSI:
         if slide_encoder.enc_name.startswith('mean-'):
             # Models without attention, just compute the product of weights and slide embeddings
             output = slide_encoder(batch, device)
-            relevancy_scores = output * weights
+            relevancy_scores = (output * weights).cpu().numpy()
             print(relevancy_scores.shape)
             relevancy_scores = np.tile(relevancy_scores[0], coords.shape[1])
         else:
             # Generate slide-level relevancy scores
             with torch.autocast(device_type='cuda', enabled=(slide_encoder.precision != torch.float32)):
-                relevancy_scores = attn_grad_rollout(batch, weights, device)
+                relevancy_scores = attn_grad_rollout(batch, weights, device).cpu().numpy()
 
         print(relevancy_scores.shape)
 
