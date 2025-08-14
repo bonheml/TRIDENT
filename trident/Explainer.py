@@ -130,7 +130,6 @@ class VITAttentionGradRollout:
         self.model.zero_grad()
         output = self.model(input_tensor, device)
         assert weights.size() == output.size()
-        print(weights.size())
         loss = (output * weights).sum()
         loss.backward()
 

@@ -1048,6 +1048,9 @@ class WSI:
             'attributes': coords_attrs
         }
 
+        print(patch_features.shape)
+        print(coords.shape)
+
         if slide_encoder.enc_name.startswith('mean-'):
             # Models without attention, just compute the product of weights and slide embeddings
             output = slide_encoder(batch, device)
@@ -1058,7 +1061,6 @@ class WSI:
             with torch.autocast(device_type='cuda', enabled=(slide_encoder.precision != torch.float32)):
                 relevancy_scores = attn_grad_rollout(batch, weights, device=device)
         relevancy_scores = relevancy_scores.cpu().numpy()
-        print(relevancy_scores.shape)
 
         # Save slide-level features if save path is provided
         os.makedirs(save_relevancy_scores, exist_ok=True)
