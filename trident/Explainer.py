@@ -104,7 +104,7 @@ class VITAttentionGradRollout:
         ----------
         [1] Chefer, Hila, Shir Gur, and Lior Wolf. "Generic attention-model explainability for interpreting bi-modal and encoder-decoder transformers." Proceedings of the IEEE/CVF International Conference on Computer Vision. 2021.
         """
-        result = torch.eye(self.attentions[0].size(-1))
+        result = torch.eye(self.attentions[0].size(-1)).to(device)
         with torch.no_grad():
             for attention, grad in zip(self.attentions, self.attention_gradients):
                 # Eq (5) of [1], only positive contribution are kept before averaging
