@@ -131,7 +131,7 @@ class VITAttentionGradRollout:
         output = self.model(input_tensor, device)
         assert weights.size() == output.size()
         print(output.size())
-        loss = (output * weights).sum()
+        loss = (output * weights).sum(axis=1)
         print(loss)
         loss.backward()
 
