@@ -93,7 +93,7 @@ class VITAttentionGradRollout:
         # mask = mask / np.max(mask)
         return mask
 
-    def grad_rollout_chefer(self):
+    def grad_rollout_chefer(self, device="cuda"):
         """Implementation of the gradient rollout proposed in [1] for unimodal ViTs.
         See https://colab.research.google.com/github/hila-chefer/Transformer-MM-Explainability/blob/main/Transformer_MM_explainability_ViT.ipynb
         for the original implementation.
@@ -110,6 +110,7 @@ class VITAttentionGradRollout:
                 # Eq (5) of [1], only positive contribution are kept before averaging
                 attention_heads_fused = (grad * attention).clamp(min=0).mean(axis=1)[0]
                 # Eq (6) of [1], accumulates the matrix relevancy at each layer
+                print(f"result device {result.device}, attention_heads_fused device {attention_heads_fused.device}")
                 result += torch.matmul(attention_heads_fused, result)
         I = torch.eye(result.size(-1))
         # compute \hat{R}^{qq} = R^{qq} - I, the matrix created by self-attention aggregation for Eq (9)
