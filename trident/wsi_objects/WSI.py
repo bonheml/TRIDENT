@@ -1053,8 +1053,6 @@ class WSI:
             # Models without attention, just compute the product of weights and slide embeddings
             output = slide_encoder(batch, device)
             relevancy_scores = (output * weights)
-            print(relevancy_scores.shape)
-            print(coords.shape)
             relevancy_scores = relevancy_scores.expand(coords.shape[1], relevancy_scores.shape[1])
         else:
             # Generate slide-level relevancy scores
