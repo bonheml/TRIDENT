@@ -112,7 +112,7 @@ class VITAttentionGradRollout:
                 # Eq (6) of [1], accumulates the matrix relevancy at each layer
                 print(f"result device {result.device}, attention_heads_fused device {attention_heads_fused.device}")
                 result += torch.matmul(attention_heads_fused, result)
-        I = torch.eye(result.size(-1))
+        I = torch.eye(result.size(-1)).to(device)
         # compute \hat{R}^{qq} = R^{qq} - I, the matrix created by self-attention aggregation for Eq (9)
         result -= I
         # Eq (9) of [1], normalises the results to account equally for the influence of the token on itself
