@@ -502,8 +502,8 @@ class FeatherSlideEncoder(BaseSlideEncoder):
 
         return model, precision, embedding_dim
     
-    def forward(self, batch, device='cuda'):
-        z, _ = self.model.forward_features(batch['features'].to(device))
+    def forward(self, batch, device='cuda', return_attention=False):
+        z, _ = self.model.forward_features(batch['features'].to(device), return_attention=return_attention)
         return z
 
 
