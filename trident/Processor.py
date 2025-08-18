@@ -919,7 +919,7 @@ class Processor:
                 create_lock(wsi_feats_fp)
                 update_log(log_fp, f'{wsi.name}{wsi.ext}', 'LOCKED. Extracting relevancy scores...')
 
-                wsi.explain_patches(
+                wsi.explain_patch(
                     patch_encoder=patch_encoder,
                     coords_path=coords_path,
                     weights_path=weights_path,
