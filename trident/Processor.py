@@ -728,6 +728,7 @@ class Processor:
 
         if weights_dir is None:
             weights_dir = os.path.join(coords_dir, f'slide_contribs_{slide_encoder.enc_name}/{dt_name}')
+        print(f"weights dir: {weights_dir}")
 
         log_fp = os.path.join(self.job_dir, coords_dir, f'_logs_slide_explainability_{slide_encoder.enc_name}_{dt_name}.txt')
 
