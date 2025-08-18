@@ -52,7 +52,7 @@ class VITAttentionGradRollout:
         :param input: the input received by the module
         :param output: the module output, here we are interested in the attention values.
         """
-        self.attention_gradients.append(output)
+        self.attentions.append(output)
 
     def get_attention_gradient(self, module, grad_input, grad_output):
         """Add attention gradients obtained from backward hooks to the attention_gradients list.
