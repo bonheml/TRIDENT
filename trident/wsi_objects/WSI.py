@@ -1137,6 +1137,8 @@ class WSI:
         with h5py.File(weights_path, 'r') as f:
             weights = f['relevancy_scores'][:]
             weights_coords = f['coords'][:]
+        weights_coords = torch.from_numpy(weights_coords).to(device)
+        weights = torch.from_numpy(weights).float().to(device)
 
         try:
             coords_attrs, coords = read_coords(coords_path)
@@ -1170,7 +1172,7 @@ class WSI:
         attn_masks = []
         for imgs, coords in dataloader:
             imgs = imgs.to(device)
-            idx = np.where(weights_coords == coords)
+            idx = np.argwhere(weights_coords == coords.flatten())[0]
             attn_grad_rollout.reset_attention()
             with torch.autocast(device_type='cuda', dtype=precision, enabled=(precision != torch.float32)):
                 attn_mask = attn_grad_rollout(imgs, weights[idx])
