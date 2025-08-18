@@ -1048,6 +1048,8 @@ class WSI:
             'attributes': coords_attrs
         }
 
+        print(f"input shape {patch_features.shape}")
+
         if slide_encoder.enc_name.startswith('mean-'):
             # Models without attention, just compute the product of weights and slide embeddings
             output = slide_encoder(batch, device)

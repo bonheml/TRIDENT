@@ -106,7 +106,7 @@ class VITAttentionGradRollout:
         # Here we assume that the first element of the attention list is of size n_heads x n_queries x n_keys.
         # For unimodal models, generally n_queries = n_keys.
         print(f"Attention shape {self.attentions[0].shape}, grad shape: {self.attention_gradients[0].shape}")
-        dim_q = self.attentions[0].size(-2)
+        dim_q = self.attentions[0].size(-1)
         result = torch.eye(dim_q).to(device)
         I = torch.eye(dim_q).to(device)
         with torch.no_grad():
