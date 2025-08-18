@@ -221,6 +221,7 @@ def run_task(processor, args):
                 saveas='h5',
                 batch_limit=args.feat_batch_size if args.feat_batch_size is not None else args.batch_size,
                 dt_name=args.dt_name,
+                slide_enc_name=args.slide_enc_name,
             )
         else:
             from trident.slide_encoder_models.load import encoder_factory
