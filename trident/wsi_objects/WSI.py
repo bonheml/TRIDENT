@@ -1015,8 +1015,6 @@ class WSI:
 
         if not slide_encoder.enc_name.startswith('mean-'):
             attn_grad_rollout = VITAttentionGradRollout(slide_encoder)
-            if slide_encoder.enc_name == "feather":
-                attn_grad_rollout.use_layer_input = True
         else:
             attn_grad_rollout = None
 
