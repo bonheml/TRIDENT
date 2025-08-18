@@ -2,7 +2,7 @@ import torch
 
 
 class VITAttentionGradRollout:
-    def __init__(self, model, attention_layer_names=('attn_drop', 'out_proj', 'to_out', 'attention_c'), discard_ratio=0.9):
+    def __init__(self, model, use_layer_input=False, attention_layer_names=('attn_drop', 'out_proj', 'to_out', 'attention_c'), discard_ratio=0.9):
         """An adaptation of the class proposed by [1] in https://github.com/jacobgil/vit-explain/blob/15a81d355a5aa6128ea4e71bbd56c28888d0f33b/vit_grad_rollout.py#L38
         :param model: the model to explain
         :param attention_layer_names: the name of the attention layers to target, defaults to 'attn_drop'
@@ -19,6 +19,7 @@ class VITAttentionGradRollout:
         self.register_hooks(attention_layer_names)
         self.attentions = []
         self.attention_gradients = []
+        self.use_layer_input = use_layer_input
 
     def register_hooks(self, attention_layer_names):
         """Register forward and backward hook for each layer with 'attention_layer_name' and store them.
@@ -52,8 +53,11 @@ class VITAttentionGradRollout:
         :param input: the input received by the module
         :param output: the module output, here we are interested in the attention values.
         """
-        print(input)
-        self.attentions.append(input[0])
+        if self.use_layer_input:
+            print(f"input: {input[0].shape}")
+            self.attentions.append(input[0])
+        else:
+            self.attention_gradients.append(output)
 
     def get_attention_gradient(self, module, grad_input, grad_output):
         """Add attention gradients obtained from backward hooks to the attention_gradients list.
@@ -62,7 +66,10 @@ class VITAttentionGradRollout:
         :param grad_input: the gradient received as input, here we are interested in the attention gradient.
         :param grad_output: the gradient produced as output.
         """
-        self.attention_gradients.append(grad_output[0])
+        if self.use_layer_input:
+            self.attention_gradients.append(grad_output[0])
+        else:
+            self.attention_gradients.append(grad_input[0])
 
     def grad_rollout_gildenblat(self):
         """ This is a slightly modified version of https://jacobgil.github.io/deeplearning/vision-transformer-explainability
