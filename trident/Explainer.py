@@ -2,7 +2,7 @@ import torch
 
 
 class VITAttentionGradRollout:
-    def __init__(self, model, attention_layer_names=('attn_drop', 'out_proj', 'to_out', 'attention_a.2', 'attention.b.2'), discard_ratio=0.9):
+    def __init__(self, model, attention_layer_names=('attn_drop', 'out_proj', 'to_out', 'attention_c'), discard_ratio=0.9):
         """An adaptation of the class proposed by [1] in https://github.com/jacobgil/vit-explain/blob/15a81d355a5aa6128ea4e71bbd56c28888d0f33b/vit_grad_rollout.py#L38
         :param model: the model to explain
         :param attention_layer_names: the name of the attention layers to target, defaults to 'attn_drop'
@@ -29,7 +29,6 @@ class VITAttentionGradRollout:
             for attention_layer_name in attention_layer_names:
                 if attention_layer_name in name:
                     print(f"Registering hooks for layer {name}")
-                    print(f"Module {module}: {name}")
                     self.handles.append(module.register_forward_hook(self.get_attention))
                     self.handles.append(module.register_full_backward_hook(self.get_attention_gradient))
 
@@ -68,7 +67,7 @@ class VITAttentionGradRollout:
         """ This is a slightly modified version of https://jacobgil.github.io/deeplearning/vision-transformer-explainability
         :return: mask of attention to add on the original image
         """
-        result = torch.eye(self.attentions[0].size(-1))
+        result = torch.eye(self.attentions[0].size(-2))
         with torch.no_grad():
             for attention, grad in zip(self.attentions, self.attention_gradients):
                 weights = grad * 100
@@ -104,15 +103,17 @@ class VITAttentionGradRollout:
         ----------
         [1] Chefer, Hila, Shir Gur, and Lior Wolf. "Generic attention-model explainability for interpreting bi-modal and encoder-decoder transformers." Proceedings of the IEEE/CVF International Conference on Computer Vision. 2021.
         """
-        result = torch.eye(self.attentions[0].size(-1)).to(device)
+        # Here we assume that the first element of the attention list is of size n_heads x n_queries x n_keys.
+        # For unimodal models, generally n_queries = n_keys.
+        dim_q = self.attentions[0].size(-2)
+        result = torch.eye(dim_q).to(device)
+        I = torch.eye(dim_q).to(device)
         with torch.no_grad():
             for attention, grad in zip(self.attentions, self.attention_gradients):
                 # Eq (5) of [1], only positive contribution are kept before averaging
                 attention_heads_fused = (grad * attention).clamp(min=0).mean(axis=1)[0]
                 # Eq (6) of [1], accumulates the matrix relevancy at each layer
-                print(f"result device {result.device}, attention_heads_fused device {attention_heads_fused.device}")
                 result += torch.matmul(attention_heads_fused, result)
-        I = torch.eye(result.size(-1)).to(device)
         # compute \hat{R}^{qq} = R^{qq} - I, the matrix created by self-attention aggregation for Eq (9)
         result -= I
         # Eq (9) of [1], normalises the results to account equally for the influence of the token on itself
