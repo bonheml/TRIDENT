@@ -110,8 +110,10 @@ class VITAttentionGradRollout:
         I = torch.eye(dim_q).to(device)
         with torch.no_grad():
             for attention, grad in zip(self.attentions, self.attention_gradients):
+                print(f"dim q {dim_q}, attention shape: {attention.shape}, grad shape: {grad.shape}")
                 # Eq (5) of [1], only positive contribution are kept before averaging
                 attention_heads_fused = (grad * attention).clamp(min=0).mean(axis=1)[0]
+                print(f"attention heads fused shape : {attention_heads_fused.shape}")
                 # Eq (6) of [1], accumulates the matrix relevancy at each layer
                 result += torch.matmul(attention_heads_fused, result)
         # compute \hat{R}^{qq} = R^{qq} - I, the matrix created by self-attention aggregation for Eq (9)
