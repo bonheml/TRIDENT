@@ -1174,7 +1174,7 @@ class WSI:
             print(coords)
             print(imgs)
             imgs = imgs.to(device)
-            idx = np.argwhere(weights_coords == coords.flatten())[0]
+            idx = np.argwhere(weights_coords == torch.cat(coords))[0]
             attn_grad_rollout.reset_attention()
             with torch.autocast(device_type='cuda', dtype=precision, enabled=(precision != torch.float32)):
                 attn_mask = attn_grad_rollout(imgs, weights[idx])
