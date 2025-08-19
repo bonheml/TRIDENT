@@ -1171,6 +1171,8 @@ class WSI:
 
         attn_masks = []
         for imgs, coords in dataloader:
+            print(coords)
+            print(imgs)
             imgs = imgs.to(device)
             idx = np.argwhere(weights_coords == coords.flatten())[0]
             attn_grad_rollout.reset_attention()
