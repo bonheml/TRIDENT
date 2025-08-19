@@ -134,7 +134,7 @@ class VITAttentionGradRollout:
         :return: an attention mask to add on the original image
         """
         self.model.zero_grad()
-        output = self.model(input_tensor, device)
+        output = self.model(input_tensor)
         assert weights.size() == output.size()
         loss = (output * weights).sum()
         loss.backward()
@@ -142,6 +142,6 @@ class VITAttentionGradRollout:
         if method == "Gildenblat":
             return self.grad_rollout_gildenblat()
         elif method == "Chefer":
-            return self.grad_rollout_chefer()
+            return self.grad_rollout_chefer(device=device)
         else:
             raise NotImplementedError(f"Method {method} is not implemented.")
