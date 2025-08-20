@@ -154,7 +154,7 @@ def run_task(processor, args):
     """
     Execute the specified task using the Trident Processor.
     """
-
+    print(f"in run_task: {args.device}")
     if args.task == 'seg':
         from trident.segmentation_models.load import segmentation_model_factory
 
@@ -242,8 +242,8 @@ def run_task(processor, args):
 def main():
 
     args = parse_arguments()
-    print(f"{torch.cuda.is_available()} and {torch.backends.cudnn.enabled}")
-    args.device = f'cuda:{args.gpu}' if (torch.cuda.is_available() and torch.backends.cudnn.enabled) else 'cpu'
+    args.device = f'cuda:{args.gpu}' if torch.cuda.is_available() else 'cpu'
+    print(f"in main: {args.device}")
 
     if args.wsi_cache:
         # === Parallel pipeline with caching ===
