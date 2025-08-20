@@ -2,7 +2,7 @@ import torch
 
 
 class VITAttentionGradRollout:
-    def __init__(self, model, use_layer_input=False, attention_layer_names=('attn_drop', 'out_proj', 'to_out', 'attention_c'), discard_ratio=0.9):
+    def __init__(self, model, use_layer_input=False, attention_layer_names=('attn_drop', 'to_out', 'attention_c'), discard_ratio=0.9):
         """An adaptation of the class proposed by [1] in https://github.com/jacobgil/vit-explain/blob/15a81d355a5aa6128ea4e71bbd56c28888d0f33b/vit_grad_rollout.py#L38
         :param model: the model to explain
         :param attention_layer_names: the name of the attention layers to target, defaults to 'attn_drop'
@@ -52,6 +52,7 @@ class VITAttentionGradRollout:
         :param input: the input received by the module
         :param output: the module output, here we are interested in the attention values.
         """
+        print(f"Retrieve attention output {output}")
         self.attentions.append(output)
 
     def get_attention_gradient(self, module, grad_input, grad_output):
@@ -61,13 +62,14 @@ class VITAttentionGradRollout:
         :param grad_input: the gradient received as input, here we are interested in the attention gradient.
         :param grad_output: the gradient produced as output.
         """
+        print(f"Retrieve gradient input {grad_input}")
         self.attention_gradients.append(grad_input[0])
 
     def grad_rollout_gildenblat(self):
         """ This is a slightly modified version of https://jacobgil.github.io/deeplearning/vision-transformer-explainability
         :return: mask of attention to add on the original image
         """
-        result = torch.eye(self.attentions[0].size(-2))
+        result = torch.eye(self.attentions[0].size(-1))
         with torch.no_grad():
             for attention, grad in zip(self.attentions, self.attention_gradients):
                 weights = grad * 100
