@@ -703,7 +703,7 @@ class UNIInferenceEncoder(BasePatchEncoder):
         # This way the attention will be computed through multiple discrete operations (softmax, dropout, matmul) instead
         # of doing all this in one go. This is less computationally efficient but allows access to intermediate outputs
         # needed to compute gradient rollout.
-        to_update = [self.model.trunk.get_submodule(f"blocks.{i}.attn") for i in range(24)]
+        to_update = [self.model.get_submodule(f"blocks.{i}.attn") for i in range(24)]
         for m in to_update:
             m.fused_attn = False
     
@@ -906,7 +906,7 @@ class VirchowInferenceEncoder(BasePatchEncoder):
         # This way the attention will be computed through multiple discrete operations (softmax, dropout, matmul) instead
         # of doing all this in one go. This is less computationally efficient but allows access to intermediate outputs
         # needed to compute gradient rollout.
-        to_update = [self.model.visual.trunk.get_submodule(f"blocks.{i}.attn") for i in range(32)]
+        to_update = [self.model.get_submodule(f"blocks.{i}.attn") for i in range(32)]
         for m in to_update:
             m.fused_attn = False
 
