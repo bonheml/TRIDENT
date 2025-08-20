@@ -52,7 +52,6 @@ class VITAttentionGradRollout:
         :param input: the input received by the module
         :param output: the module output, here we are interested in the attention values.
         """
-        print(f"Retrieve attention output {output}")
         self.attentions.append(output)
 
     def get_attention_gradient(self, module, grad_input, grad_output):
@@ -62,7 +61,6 @@ class VITAttentionGradRollout:
         :param grad_input: the gradient received as input, here we are interested in the attention gradient.
         :param grad_output: the gradient produced as output.
         """
-        print(f"Retrieve gradient input {grad_input}")
         self.attention_gradients.append(grad_input[0])
 
     def grad_rollout_gildenblat(self):
