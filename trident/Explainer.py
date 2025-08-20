@@ -139,6 +139,7 @@ class VITAttentionGradRollout:
         output = self.model(input_tensor)
         assert weights.size() == output.size()
         loss = (output * weights).sum()
+        print(loss)
         loss.backward()
 
         if method == "Gildenblat":

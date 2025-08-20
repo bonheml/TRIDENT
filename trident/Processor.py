@@ -875,6 +875,8 @@ class Processor:
         if weights_dir is None:
             weights_dir = os.path.join(coords_dir, f'slide_explainability_{slide_enc_name}_{dt_name}')
 
+        patch_encoder.prepare_model_for_explainability()
+
         sig = signature(self.run_patch_explainability_job)
         local_attrs = {k: v for k, v in locals().items() if k in sig.parameters}
         cfg_fp = os.path.join(self.job_dir, coords_dir, f'_config_patch_explainability_{slide_enc_name}_{patch_encoder.enc_name}_{dt_name}.json')

@@ -117,6 +117,9 @@ class BasePatchEncoder(torch.nn.Module):
             self.ensure_valid_weights_path(weights_path)
             return weights_path
 
+    def prepare_model_for_explainability(self):
+        pass
+
     def forward(self, x):
         """
         Can be overwritten if model requires special forward pass.
@@ -256,6 +259,17 @@ class Conchv1InferenceEncoder(BasePatchEncoder):
         precision = torch.float32
         
         return model, eval_transform, precision
+
+    def prepare_model_for_explainability(self):
+        # This part is very important as we can only extract attention maps properly from non fused attention.
+        # CONCH uses the timm library for ViT which allows fused attention to be disabled by setting fused_attn to False.
+        # This way the attention will be computed through multiple discrete operations (softmax, dropout, matmul) instead
+        # of doing all this in one go. This is less computationally efficient but allows access to intermediate outputs
+        # needed to compute gradient rollout.
+        to_update = [self.model.visual.trunk.get_submodule(f"blocks.{i}.attn") for i in range(12)]
+        for m in to_update:
+            m.fused_attn = False
+
     
     def forward(self, x):
         return self.model.encode_image(x, proj_contrast=self.with_proj, normalize=self.normalize)
@@ -682,6 +696,16 @@ class UNIInferenceEncoder(BasePatchEncoder):
 
         precision = torch.float16
         return model, eval_transform, precision
+
+    def prepare_model_for_explainability(self):
+        # This part is very important as we can only extract attention maps properly from non fused attention.
+        # UNI uses the timm library for ViT which allows fused attention to be disabled by setting fused_attn to False.
+        # This way the attention will be computed through multiple discrete operations (softmax, dropout, matmul) instead
+        # of doing all this in one go. This is less computationally efficient but allows access to intermediate outputs
+        # needed to compute gradient rollout.
+        to_update = [self.model.trunk.get_submodule(f"blocks.{i}.attn") for i in range(24)]
+        for m in to_update:
+            m.fused_attn = False
     
 
 class UNIv2InferenceEncoder(BasePatchEncoder):
@@ -874,6 +898,17 @@ class VirchowInferenceEncoder(BasePatchEncoder):
             patch_tokens = output[:, 1:]
             embeddings = torch.cat([class_token, patch_tokens.mean(1)], dim=-1)
             return embeddings
+
+
+    def prepare_model_for_explainability(self):
+        # This part is very important as we can only extract attention maps properly from non fused attention.
+        # Virchow uses the timm library for ViT which allows fused attention to be disabled by setting fused_attn to False.
+        # This way the attention will be computed through multiple discrete operations (softmax, dropout, matmul) instead
+        # of doing all this in one go. This is less computationally efficient but allows access to intermediate outputs
+        # needed to compute gradient rollout.
+        to_update = [self.model.visual.trunk.get_submodule(f"blocks.{i}.attn") for i in range(32)]
+        for m in to_update:
+            m.fused_attn = False
 
 
 class Virchow2InferenceEncoder(BasePatchEncoder):
