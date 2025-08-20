@@ -1178,7 +1178,7 @@ class WSI:
             dt = 'cuda' if device.startswith('cuda') else 'cpu'
             with torch.autocast(device_type=dt, dtype=precision, enabled=(precision != torch.float32)):
                 attn_mask = attn_grad_rollout(imgs, weights[idx], device=device)
-            attn_masks.append(attn_mask.cpu().numpy())
+            attn_masks.append(attn_mask.numpy())
 
         # Concatenate features
         attn_masks = np.concatenate(attn_masks, axis=0)

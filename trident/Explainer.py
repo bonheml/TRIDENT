@@ -52,7 +52,7 @@ class VITAttentionGradRollout:
         :param input: the input received by the module
         :param output: the module output, here we are interested in the attention values.
         """
-        self.attentions.append(output)
+        self.attentions.append(output.detach().cpu())
 
     def get_attention_gradient(self, module, grad_input, grad_output):
         """Add attention gradients obtained from backward hooks to the attention_gradients list.
@@ -61,7 +61,7 @@ class VITAttentionGradRollout:
         :param grad_input: the gradient received as input, here we are interested in the attention gradient.
         :param grad_output: the gradient produced as output.
         """
-        self.attention_gradients.append(grad_input[0])
+        self.attention_gradients.append(grad_input[0].detach().cpu())
 
     def grad_rollout_gildenblat(self):
         """ This is a slightly modified version of https://jacobgil.github.io/deeplearning/vision-transformer-explainability
@@ -107,8 +107,8 @@ class VITAttentionGradRollout:
         # For unimodal models, generally n_queries = n_keys.
         #print(f"Attention shape {self.attentions[0].shape}, grad shape: {self.attention_gradients[0].shape}")
         dim_q = self.attentions[0].size(-1)
-        result = torch.eye(dim_q).to(device)
-        I = torch.eye(dim_q).to(device)
+        result = torch.eye(dim_q).to('cpu')
+        I = torch.eye(dim_q).to('cpu')
         with torch.no_grad():
             for attention, grad in zip(self.attentions, self.attention_gradients):
                 #print(f"dim q {dim_q}, attention shape: {attention.shape}, grad shape: {grad.shape}")
@@ -138,6 +138,7 @@ class VITAttentionGradRollout:
         assert weights.size() == output.size()
         loss = (output * weights).sum()
         loss.backward()
+        torch.cuda.empty_cache()
 
         if method == "Gildenblat":
             return self.grad_rollout_gildenblat()
