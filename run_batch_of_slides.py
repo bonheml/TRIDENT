@@ -242,7 +242,7 @@ def run_task(processor, args):
 def main():
 
     args = parse_arguments()
-    args.device = f'cuda:{args.gpu}' if torch.cuda.is_available() else 'cpu'
+    args.device = f'cuda:{args.gpu}' if (torch.cuda.is_available() and torch.backends.cudnn.enabled) else 'cpu'
 
     if args.wsi_cache:
         # === Parallel pipeline with caching ===
