@@ -1057,7 +1057,8 @@ class WSI:
             relevancy_scores = relevancy_scores.expand(coords.shape[1], relevancy_scores.shape[1])
         else:
             # Generate slide-level relevancy scores
-            with torch.autocast(device_type='cuda', enabled=(slide_encoder.precision != torch.float32)):
+            dt = 'cuda' if device.startswith('cuda') else 'cpu'
+            with torch.autocast(device_type=dt, enabled=(slide_encoder.precision != torch.float32)):
                 relevancy_scores = attn_grad_rollout(batch, weights, device=device)
         relevancy_scores = relevancy_scores.cpu().numpy()
         print(relevancy_scores.shape)
@@ -1174,8 +1175,9 @@ class WSI:
             imgs = imgs.to(device)
             idx = torch.where((weights_coords == torch.cat(c).to(device)).all(dim=1))[0]
             attn_grad_rollout.reset_attention()
-            with torch.autocast(device_type='cuda', dtype=precision, enabled=(precision != torch.float32)):
-                attn_mask = attn_grad_rollout(imgs, weights[idx])
+            dt = 'cuda' if device.startswith('cuda') else 'cpu'
+            with torch.autocast(device_type=dt, dtype=precision, enabled=(precision != torch.float32)):
+                attn_mask = attn_grad_rollout(imgs, weights[idx], device=device)
             attn_masks.append(attn_mask.cpu().numpy())
 
         # Concatenate features
