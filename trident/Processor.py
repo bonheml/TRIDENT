@@ -928,6 +928,7 @@ class Processor:
                     save_features=os.path.join(self.job_dir, saveto),
                     device=device
                 )
+                wsi.release()
 
                 remove_lock(wsi_feats_fp)
                 update_log(log_fp, f'{wsi.name}{wsi.ext}', 'Relevancy scores extracted.')
