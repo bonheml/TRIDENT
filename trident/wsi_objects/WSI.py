@@ -1,5 +1,5 @@
 from __future__ import annotations
-
+from memory_profiler import profile
 import h5py
 from abc import abstractmethod
 import numpy as np
@@ -1081,6 +1081,7 @@ class WSI:
         return save_path
 
 
+    @profile
     def explain_patch(
             self,
             patch_encoder: torch.nn.Module,
@@ -1178,7 +1179,9 @@ class WSI:
             dt = 'cuda' if device.startswith('cuda') else 'cpu'
             with torch.autocast(device_type=dt, dtype=precision, enabled=(precision != torch.float32)):
                 attn_mask = attn_grad_rollout(imgs, weights[idx], device=device)
-            attn_masks.append(attn_mask.numpy())
+                torch.cuda.empty_cache()
+            cpu_attn_mask = attn_mask.numpy(force=True)
+            attn_masks.append(cpu_attn_mask)
 
         # Concatenate features
         attn_masks = np.concatenate(attn_masks, axis=0)
