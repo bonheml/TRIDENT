@@ -93,7 +93,7 @@ class VITAttentionGradRollout:
         return mask
 
     @profile
-    def grad_rollout_chefer(self, device="cuda"):
+    def grad_rollout_chefer(self, device="cpu"):
         """Implementation of the gradient rollout proposed in [1] for unimodal ViTs.
         See https://colab.research.google.com/github/hila-chefer/Transformer-MM-Explainability/blob/main/Transformer_MM_explainability_ViT.ipynb
         for the original implementation.
@@ -144,6 +144,6 @@ class VITAttentionGradRollout:
         if method == "Gildenblat":
             return self.grad_rollout_gildenblat()
         elif method == "Chefer":
-            return self.grad_rollout_chefer(device=device)
+            return self.grad_rollout_chefer()
         else:
             raise NotImplementedError(f"Method {method} is not implemented.")
