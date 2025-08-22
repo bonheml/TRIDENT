@@ -1,3 +1,5 @@
+import gc
+
 import torch
 
 class VITAttentionGradRollout:
@@ -41,8 +43,14 @@ class VITAttentionGradRollout:
     def reset_attention(self):
         """Reset the attention and attention gradient lists.
         """
+        for a in self.attentions:
+            del a
+        for a in self.attention_gradients:
+            del a
         self.attentions = []
         self.attention_gradients = []
+        gc.collect()
+        torch.cuda.empty_cache()
 
     def get_attention(self, module, input, output):
         """Add attention values obtained from forward hooks to the attention list.
@@ -122,6 +130,7 @@ class VITAttentionGradRollout:
         # and for the contextualisation.
         result = result / result.sum(dim=-1) + I
         mask = result[0, 1:]
+        print(f"mask shape {mask.shape}")
         return mask
 
 

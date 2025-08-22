@@ -1171,20 +1171,32 @@ class WSI:
         dataloader = tqdm(dataloader) if verbose else dataloader
 
         attn_masks = []
+
+        tracemalloc.start()
+        i = 0
         for imgs, c in dataloader:
+            i+=1
             imgs = imgs.to(device)
+            snapshot1 = tracemalloc.take_snapshot()
             idx = torch.where((weights_coords == torch.cat(c).to(device)).all(dim=1))[0]
+            attn_mask = attn_grad_rollout(imgs, weights[idx], device=device)
+            snapshot2 = tracemalloc.take_snapshot()
             attn_grad_rollout.reset_attention()
-            dt = 'cuda' if device.startswith('cuda') else 'cpu'
-            tracemalloc.start()
-            with torch.autocast(device_type=dt, dtype=precision, enabled=(precision != torch.float32)):
-                attn_mask = attn_grad_rollout(imgs, weights[idx], device=device)
-                torch.cuda.empty_cache()
-            current, peak = tracemalloc.get_traced_memory()
-            print(f"{current:0.2f}, {peak:0.2f}")
-            tracemalloc.stop()
-            cpu_attn_mask = attn_mask.numpy(force=True)
-            attn_masks.append(cpu_attn_mask)
+            snapshot3 = tracemalloc.take_snapshot()
+            top_stats3 = snapshot3.statistics('lineno')
+            top_stats = snapshot2.compare_to(snapshot1, 'lineno')
+            top_stats_free = snapshot3.compare_to(snapshot1, 'lineno')
+            print(f"[ Top 10 differences before reset attention] - iteration {i}")
+            for stat in top_stats[:10]:
+                print(stat)
+            print(f"[ Top 10 differences after reset attention] - iteration {i}")
+            for stat in top_stats_free[:10]:
+                print(stat)
+            print("[ Top 10 usage after reset attention] - iteration {i}")
+            for stat in top_stats3[:10]:
+                print(stat)
+            attn_masks.append(attn_mask.cpu().numpy())
+        tracemalloc.stop()
 
         # Concatenate features
         attn_masks = np.concatenate(attn_masks, axis=0)
