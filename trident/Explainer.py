@@ -59,7 +59,7 @@ class VITAttentionGradRollout:
         :param input: the input received by the module
         :param output: the module output, here we are interested in the attention values.
         """
-        self.attentions.append(output)
+        self.attentions.append(output.detach().cpu())
 
     def get_attention_gradient(self, module, grad_input, grad_output):
         """Add attention gradients obtained from backward hooks to the attention_gradients list.
@@ -68,7 +68,7 @@ class VITAttentionGradRollout:
         :param grad_input: the gradient received as input, here we are interested in the attention gradient.
         :param grad_output: the gradient produced as output.
         """
-        self.attention_gradients.append(grad_input[0])
+        self.attention_gradients.append(grad_input[0].detach().cpu())
 
     def grad_rollout_gildenblat(self):
         """ This is a slightly modified version of https://jacobgil.github.io/deeplearning/vision-transformer-explainability
@@ -99,7 +99,7 @@ class VITAttentionGradRollout:
         # mask = mask / np.max(mask)
         return mask
 
-    def grad_rollout_chefer(self, device="gpu"):
+    def grad_rollout_chefer(self, device="cpu"):
         """Implementation of the gradient rollout proposed in [1] for unimodal ViTs.
         See https://colab.research.google.com/github/hila-chefer/Transformer-MM-Explainability/blob/main/Transformer_MM_explainability_ViT.ipynb
         for the original implementation.
@@ -151,7 +151,7 @@ class VITAttentionGradRollout:
         if method == "Gildenblat":
             res = self.grad_rollout_gildenblat()
         elif method == "Chefer":
-            res = self.grad_rollout_chefer(device=device)
+            res = self.grad_rollout_chefer()
         else:
             raise NotImplementedError(f"Method {method} is not implemented.")
 
