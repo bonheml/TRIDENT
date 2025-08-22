@@ -1,5 +1,5 @@
 from __future__ import annotations
-from memory_profiler import profile
+import tracemalloc
 import h5py
 from abc import abstractmethod
 import numpy as np
@@ -1081,7 +1081,6 @@ class WSI:
         return save_path
 
 
-    @profile
     def explain_patch(
             self,
             patch_encoder: torch.nn.Module,
@@ -1177,9 +1176,13 @@ class WSI:
             idx = torch.where((weights_coords == torch.cat(c).to(device)).all(dim=1))[0]
             attn_grad_rollout.reset_attention()
             dt = 'cuda' if device.startswith('cuda') else 'cpu'
+            tracemalloc.start()
             with torch.autocast(device_type=dt, dtype=precision, enabled=(precision != torch.float32)):
                 attn_mask = attn_grad_rollout(imgs, weights[idx], device=device)
                 torch.cuda.empty_cache()
+            current, peak = tracemalloc.get_traced_memory()
+            print(f"{current:0.2f}, {peak:0.2f}")
+            tracemalloc.stop()
             cpu_attn_mask = attn_mask.numpy(force=True)
             attn_masks.append(cpu_attn_mask)
 

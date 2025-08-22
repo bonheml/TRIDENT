@@ -1,5 +1,4 @@
 import torch
-from memory_profiler import profile
 
 class VITAttentionGradRollout:
     def __init__(self, model, use_layer_input=False, attention_layer_names=('attn_drop', 'to_out', 'attention_c'), discard_ratio=0.9):
@@ -92,7 +91,6 @@ class VITAttentionGradRollout:
         # mask = mask / np.max(mask)
         return mask
 
-    @profile
     def grad_rollout_chefer(self, device="cpu"):
         """Implementation of the gradient rollout proposed in [1] for unimodal ViTs.
         See https://colab.research.google.com/github/hila-chefer/Transformer-MM-Explainability/blob/main/Transformer_MM_explainability_ViT.ipynb
@@ -126,7 +124,7 @@ class VITAttentionGradRollout:
         mask = result[0, 1:]
         return mask
 
-    @profile
+
     def __call__(self, input_tensor, weights, method="Chefer", device="cuda"):
         """Call the gradient rollout method using the forward and backward hooks previously registered.
 
