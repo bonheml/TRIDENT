@@ -1,4 +1,5 @@
 from __future__ import annotations
+import tracemalloc
 import h5py
 from abc import abstractmethod
 import numpy as np
@@ -1171,12 +1172,31 @@ class WSI:
 
         attn_masks = []
 
+        tracemalloc.start()
+        i = 0
         for imgs, c in dataloader:
+            i+=1
             imgs = imgs.to(device)
+            snapshot1 = tracemalloc.take_snapshot()
             idx = torch.where((weights_coords == torch.cat(c).to(device)).all(dim=1))[0]
             attn_mask = attn_grad_rollout(imgs, weights[idx], device=device)
+            snapshot2 = tracemalloc.take_snapshot()
             attn_grad_rollout.reset_attention()
+            snapshot3 = tracemalloc.take_snapshot()
+            top_stats3 = snapshot3.statistics('lineno')
+            top_stats = snapshot2.compare_to(snapshot1, 'lineno')
+            top_stats_free = snapshot3.compare_to(snapshot2, 'lineno')
+            print(f"[ Top 10 differences before reset attention] - iteration {i}")
+            for stat in top_stats[:10]:
+                print(stat)
+            print(f"[ Top 10 differences after reset attention] - iteration {i}")
+            for stat in top_stats_free[:10]:
+                print(stat)
+            print(f"[ Top 10 usage after reset attention] - iteration {i}")
+            for stat in top_stats3[:10]:
+                print(stat)
             attn_masks.append(attn_mask.cpu().numpy())
+        tracemalloc.stop()
 
         # Concatenate features
         attn_masks = np.concatenate(attn_masks, axis=0)
