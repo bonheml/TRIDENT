@@ -1180,6 +1180,7 @@ class WSI:
             snapshot1 = tracemalloc.take_snapshot()
             idx = torch.where((weights_coords == torch.cat(c).to(device)).all(dim=1))[0]
             attn_mask = attn_grad_rollout(imgs, weights[idx], device=device)
+            attn_masks.append(attn_mask.detach().cpu().numpy())
             snapshot2 = tracemalloc.take_snapshot()
             attn_grad_rollout.reset_attention()
             snapshot3 = tracemalloc.take_snapshot()
@@ -1195,7 +1196,6 @@ class WSI:
             print(f"[ Top 10 usage after reset attention] - iteration {i}")
             for stat in top_stats3[:10]:
                 print(stat)
-            attn_masks.append(attn_mask.cpu().numpy())
         tracemalloc.stop()
 
         # Concatenate features
