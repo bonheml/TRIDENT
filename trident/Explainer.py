@@ -129,8 +129,9 @@ class VITAttentionGradRollout:
         # Eq (9) of [1], normalises the results to account equally for the influence of the token on itself
         # and for the contextualisation.
         result = result / result.sum(dim=-1) + I
+        # Extract the relevancy score of all the image patches to the [CLS] token stored at index 0, which
+        # holds the features of the entire image.
         mask = result[0, 1:]
-        print(f"mask shape {mask.shape}")
         return mask
 
 
