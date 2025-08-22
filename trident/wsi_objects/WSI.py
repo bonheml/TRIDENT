@@ -1185,14 +1185,14 @@ class WSI:
             snapshot3 = tracemalloc.take_snapshot()
             top_stats3 = snapshot3.statistics('lineno')
             top_stats = snapshot2.compare_to(snapshot1, 'lineno')
-            top_stats_free = snapshot3.compare_to(snapshot1, 'lineno')
+            top_stats_free = snapshot3.compare_to(snapshot2, 'lineno')
             print(f"[ Top 10 differences before reset attention] - iteration {i}")
             for stat in top_stats[:10]:
                 print(stat)
             print(f"[ Top 10 differences after reset attention] - iteration {i}")
             for stat in top_stats_free[:10]:
                 print(stat)
-            print("[ Top 10 usage after reset attention] - iteration {i}")
+            print(f"[ Top 10 usage after reset attention] - iteration {i}")
             for stat in top_stats3[:10]:
                 print(stat)
             attn_masks.append(attn_mask.cpu().numpy())

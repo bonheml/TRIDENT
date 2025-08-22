@@ -149,8 +149,11 @@ class VITAttentionGradRollout:
         loss.backward()
 
         if method == "Gildenblat":
-            return self.grad_rollout_gildenblat()
+            res = self.grad_rollout_gildenblat()
         elif method == "Chefer":
-            return self.grad_rollout_chefer()
+            res = self.grad_rollout_chefer()
         else:
             raise NotImplementedError(f"Method {method} is not implemented.")
+
+        del loss, output, weights
+        return res
