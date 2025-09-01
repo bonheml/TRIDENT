@@ -897,7 +897,7 @@ class Processor:
             wsi_feats_fp = os.path.join(self.job_dir, saveto, f'{wsi.name}.{saveas}')
             # Check if features already exist
             if os.path.exists(wsi_feats_fp) and not is_locked(wsi_feats_fp):
-                self.loop.set_postfix_str(f'Relevancy scores already extracted for {wsi}. Skipping...')
+                self.loop.set_postfix_str(f'Relevancy scores already extracted for {wsi.name}. Skipping...')
                 update_log(log_fp, f'{wsi.name}{wsi.ext}', 'Relevancy scores.')
                 continue
 

@@ -1184,6 +1184,16 @@ class Conchv15InferenceEncoder(BasePatchEncoder):
         precision = torch.float16
         return model, eval_transform, precision
 
+    def prepare_model_for_explainability(self):
+        # This part is very important as we can only extract attention maps properly from non fused attention.
+        # CONCH v1.5 uses the timm library for ViT which allows fused attention to be disabled by setting fused_attn to False.
+        # This way the attention will be computed through multiple discrete operations (softmax, dropout, matmul) instead
+        # of doing all this in one go. This is less computationally efficient but allows access to intermediate outputs
+        # needed to compute gradient rollout.
+        to_update = [self.model.trunk.get_submodule(f"blocks.{i}.attn") for i in range(24)]
+        for m in to_update:
+            m.fused_attn = False
+
 
 class Midnight12kInferenceEncoder(BasePatchEncoder):
 
