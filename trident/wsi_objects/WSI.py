@@ -1129,7 +1129,6 @@ class WSI:
         self._lazy_initialize()
         patch_encoder.to(device)
         patch_encoder.eval()
-        precision = getattr(patch_encoder, 'precision', torch.float32)
         patch_transforms = patch_encoder.eval_transforms
 
         attn_grad_rollout = VITAttentionGradRollout(patch_encoder)
@@ -1196,6 +1195,7 @@ class WSI:
             print(f"[ Top 10 usage after reset attention] - iteration {i}")
             for stat in top_stats3[:10]:
                 print(stat)
+        attn_grad_rollout.remove_hooks()
         tracemalloc.stop()
 
         # Concatenate features
