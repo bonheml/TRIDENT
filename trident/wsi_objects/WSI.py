@@ -13,6 +13,7 @@ from tqdm import tqdm
 
 from trident.Explainer import VITAttentionGradRollout
 from trident.segmentation_models.load import SegmentationModel
+from trident.wsi_objects.WSIExplainerDataset import WSIExplainerDataset
 from trident.wsi_objects.WSIPatcher import *
 from trident.wsi_objects.WSIPatcherDataset import WSIPatcherDataset
 from trident.IO import (
@@ -1133,8 +1134,6 @@ class WSI:
         # Load weights from h5 file
         with h5py.File(weights_path, 'r') as f:
             weights = f['relevancy_scores'][:]
-            weights_coords = f['coords'][:]
-        weights_coords = torch.from_numpy(weights_coords).to(device)
         weights = torch.from_numpy(weights).float().to(device)
 
         try:
@@ -1159,7 +1158,7 @@ class WSI:
                 pil=True,
             )
 
-        dataset = WSIPatcherDataset(patcher, patch_transforms)
+        dataset = WSIExplainerDataset(patcher, patch_transforms, weights)
         dataloader = DataLoader(dataset, batch_size=1,
                                 num_workers=get_num_workers(1, max_workers=self.max_workers),
                                 pin_memory=False)
@@ -1168,31 +1167,11 @@ class WSI:
 
         attn_masks = []
 
-        tracemalloc.start()
-        i = 0
-        for imgs, c in dataloader:
+        for img, _, weight in dataloader:
             attn_grad_rollout.reset_attention()
-            i+=1
-            imgs = imgs.to(device)
-            snapshot1 = tracemalloc.take_snapshot()
-            idx = torch.where((weights_coords == torch.cat(c).to(device)).all(dim=1))[0]
-            attn_mask = attn_grad_rollout(imgs, weights[idx], device=device)
+            img = img.to(device)
+            attn_mask = attn_grad_rollout(img, weight, device=device)
             attn_masks.append(attn_mask.detach().cpu().numpy())
-            snapshot2 = tracemalloc.take_snapshot()
-            snapshot3 = tracemalloc.take_snapshot()
-            top_stats3 = snapshot3.statistics('lineno')
-            top_stats = snapshot2.compare_to(snapshot1, 'lineno')
-            top_stats_free = snapshot3.compare_to(snapshot2, 'lineno')
-            print(f"[ Top 10 differences before reset attention] - iteration {i}")
-            for stat in top_stats[:10]:
-                print(stat)
-            print(f"[ Top 10 differences after reset attention] - iteration {i}")
-            for stat in top_stats_free[:10]:
-                print(stat)
-            print(f"[ Top 10 usage after reset attention] - iteration {i}")
-            for stat in top_stats3[:10]:
-                print(stat)
-        tracemalloc.stop()
 
         # Concatenate features
         attn_masks = np.concatenate(attn_masks, axis=0)
