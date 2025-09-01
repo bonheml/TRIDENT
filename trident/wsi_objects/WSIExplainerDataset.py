@@ -15,7 +15,6 @@ class WSIExplainerDataset(Dataset):
     def __getitem__(self, index):
         tile, x, y = self.patcher[index]
         weight = self.weights[index]
-        print(f"weights shape {weight.shape}")
 
         if self.transform:
             tile = self.transform(tile)
