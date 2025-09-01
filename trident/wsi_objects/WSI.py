@@ -1169,6 +1169,7 @@ class WSI:
         for img, _, weight in dataloader:
             attn_grad_rollout.reset_attention()
             img = img.to(device)
+            weight = weight.to(device)
             attn_mask = attn_grad_rollout(img, weight, device=device)
             attn_masks.append(attn_mask.detach().cpu().numpy())
             print(f"attn mask shape: {attn_masks[-1].shape}")
