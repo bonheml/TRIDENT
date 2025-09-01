@@ -1087,6 +1087,7 @@ class WSI:
             coords_path: str,
             weights_path: str,
             save_features: str,
+            attn_grad_rollout: VITAttentionGradRollout,
             device: str = 'cuda:0',
             verbose: bool = False
     ) -> str:
@@ -1127,11 +1128,7 @@ class WSI:
         """
 
         self._lazy_initialize()
-        patch_encoder.to(device)
-        patch_encoder.eval()
         patch_transforms = patch_encoder.eval_transforms
-
-        attn_grad_rollout = VITAttentionGradRollout(patch_encoder)
 
         # Load weights from h5 file
         with h5py.File(weights_path, 'r') as f:
@@ -1174,6 +1171,7 @@ class WSI:
         tracemalloc.start()
         i = 0
         for imgs, c in dataloader:
+            attn_grad_rollout.reset_attention()
             i+=1
             imgs = imgs.to(device)
             snapshot1 = tracemalloc.take_snapshot()
@@ -1181,7 +1179,6 @@ class WSI:
             attn_mask = attn_grad_rollout(imgs, weights[idx], device=device)
             attn_masks.append(attn_mask.detach().cpu().numpy())
             snapshot2 = tracemalloc.take_snapshot()
-            attn_grad_rollout.reset_attention()
             snapshot3 = tracemalloc.take_snapshot()
             top_stats3 = snapshot3.statistics('lineno')
             top_stats = snapshot2.compare_to(snapshot1, 'lineno')
@@ -1195,7 +1192,6 @@ class WSI:
             print(f"[ Top 10 usage after reset attention] - iteration {i}")
             for stat in top_stats3[:10]:
                 print(stat)
-        attn_grad_rollout.remove_hooks()
         tracemalloc.stop()
 
         # Concatenate features

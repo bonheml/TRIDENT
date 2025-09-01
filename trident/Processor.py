@@ -9,6 +9,7 @@ import geopandas as gpd
 import pandas as pd 
 
 from trident import load_wsi, WSIReaderType
+from trident.Explainer import VITAttentionGradRollout
 from trident.IO import create_lock, remove_lock, is_locked, update_log, collect_valid_slides
 from trident.Maintenance import deprecated
 from trident.Converter import OPENSLIDE_EXTENSIONS, PIL_EXTENSIONS
@@ -876,6 +877,9 @@ class Processor:
             weights_dir = os.path.join(coords_dir, f'slide_explainability_{slide_enc_name}_{dt_name}')
 
         patch_encoder.prepare_model_for_explainability()
+        patch_encoder.to(device)
+        patch_encoder.eval()
+        attn_grad_rollout = VITAttentionGradRollout(patch_encoder)
 
         sig = signature(self.run_patch_explainability_job)
         local_attrs = {k: v for k, v in locals().items() if k in sig.parameters}
@@ -922,6 +926,7 @@ class Processor:
                 update_log(log_fp, f'{wsi.name}{wsi.ext}', 'LOCKED. Extracting relevancy scores...')
 
                 wsi.explain_patch(
+                    attn_grad_rollout=attn_grad_rollout,
                     patch_encoder=patch_encoder,
                     coords_path=coords_path,
                     weights_path=weights_path,
@@ -941,6 +946,7 @@ class Processor:
                 else:
                     raise e
 
+        attn_grad_rollout.remove_hooks()
         # Return the directory where the features are saved
         return os.path.join(self.job_dir, saveto)
 
