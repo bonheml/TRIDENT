@@ -3,7 +3,7 @@ import gc
 import torch
 
 class VITAttentionGradRollout:
-    def __init__(self, model, use_layer_input=False, attention_layer_names=('attn_drop', 'to_out', 'attention_c'), discard_ratio=0.9):
+    def __init__(self, model, use_layer_input=False, attention_layer_names=('attn_drop', 'attention_c'), discard_ratio=0.9):
         """An adaptation of the class proposed by [1] in https://github.com/jacobgil/vit-explain/blob/15a81d355a5aa6128ea4e71bbd56c28888d0f33b/vit_grad_rollout.py#L38
         :param model: the model to explain
         :param attention_layer_names: the name of the attention layers to target, defaults to 'attn_drop'
