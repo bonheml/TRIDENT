@@ -1134,7 +1134,6 @@ class WSI:
         # Load weights from h5 file
         with h5py.File(weights_path, 'r') as f:
             weights = f['relevancy_scores'][:]
-        weights = torch.from_numpy(weights).float().to(device)
 
         try:
             coords_attrs, coords = read_coords(coords_path)
@@ -1172,6 +1171,7 @@ class WSI:
             img = img.to(device)
             attn_mask = attn_grad_rollout(img, weight, device=device)
             attn_masks.append(attn_mask.detach().cpu().numpy())
+            print(f"attn mask shape: {attn_masks[-1].shape}")
 
         # Concatenate features
         attn_masks = np.concatenate(attn_masks, axis=0)
