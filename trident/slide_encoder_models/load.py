@@ -109,6 +109,8 @@ class BaseSlideEncoder(torch.nn.Module):
         """
         pass
 
+    def prepare_model_for_explainability(self):
+        pass
 
 class CustomSlideEncoder(BaseSlideEncoder):
     def __init__(

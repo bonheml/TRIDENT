@@ -730,32 +730,22 @@ class Processor:
         if weights_dir is None:
             weights_dir = os.path.join(coords_dir, f'slide_contribs_{slide_encoder.enc_name}/{dt_name}')
 
-        log_fp = os.path.join(self.job_dir, coords_dir, f'_logs_slide_explainability_{slide_encoder.enc_name}_{dt_name}.txt')
+        slide_encoder.prepare_model_for_explainability()
+        slide_encoder.to(device)
+        slide_encoder.eval()
 
-        # Run patch feature extraction if some patch features are missing:
-        already_processed = []
-        if os.path.isdir(os.path.join(self.job_dir, patch_features_dir)):
-            already_processed = [os.path.splitext(x)[0] for x in
-                                 os.listdir(os.path.join(self.job_dir, patch_features_dir)) if x.endswith(saveas)]
-            wsi_names = [slide.name for slide in self.wsis]
-            already_processed = [x for x in already_processed if x in wsi_names]
-        if len(already_processed) < len(self.wsis):
-            print(
-                f"[PROCESSOR] Some patch features haven't been extracted in {len(already_processed)}/{len(self.wsis)} WSIs. Starting extraction.")
-            from trident.patch_encoder_models.load import encoder_factory
-            patch_encoder = encoder_factory(slide_to_patch_encoder_name[slide_encoder.enc_name])
-            self.run_patch_feature_extraction_job(
-                coords_dir=coords_dir,
-                patch_encoder=patch_encoder,
-                device=device,
-                saveas='h5',  # must use h5 to run slide extraction later to get coords.
-                batch_limit=batch_limit,
-            )
+        if not slide_encoder.enc_name.startswith('mean-'):
+            attn_grad_rollout = VITAttentionGradRollout(slide_encoder)
+        else:
+            attn_grad_rollout = None
 
         sig = signature(self.run_slide_explainability_job)
         local_attrs = {k: v for k, v in locals().items() if k in sig.parameters}
+        cfg_fp = os.path.join(self.job_dir, coords_dir, f'_config_slide_explainability_{slide_encoder.enc_name}_{dt_name}.json')
+        log_fp = os.path.join(self.job_dir, coords_dir, f'_logs_slide_explainability_{slide_encoder.enc_name}_{dt_name}.txt')
+
         self.save_config(
-            saveto=os.path.join(self.job_dir, coords_dir, f'_config_slide_explainability_{slide_encoder.enc_name}_{dt_name}.json'),
+            saveto=cfg_fp,
             local_attrs=local_attrs,
             ignore=['loop', 'valid_slides', 'wsis']
         )
@@ -796,12 +786,15 @@ class Processor:
 
                 # Call the explain_slide method
                 wsi.explain_slide(
+                    attn_grad_rollout=attn_grad_rollout,
+                    slide_encoder=slide_encoder,
                     patch_features_path=patch_features_path,
                     weights_path=weights_path,
-                    slide_encoder=slide_encoder,
-                    device=device,
-                    save_relevancy_scores=os.path.join(self.job_dir, saveto)
+                    save_relevancy_scores=os.path.join(self.job_dir, saveto),
+                    device=device
                 )
+                wsi.release()
+                attn_grad_rollout.remove_hooks()
 
                 remove_lock(slide_relevancy_path)
                 update_log(log_fp, f'{wsi.name}{wsi.ext}', 'Slide features extracted.')
@@ -934,6 +927,7 @@ class Processor:
                     device=device
                 )
                 wsi.release()
+                attn_grad_rollout.remove_hooks()
 
                 remove_lock(wsi_feats_fp)
                 update_log(log_fp, f'{wsi.name}{wsi.ext}', 'Relevancy scores extracted.')
@@ -946,7 +940,6 @@ class Processor:
                 else:
                     raise e
 
-        attn_grad_rollout.remove_hooks()
         # Return the directory where the features are saved
         return os.path.join(self.job_dir, saveto)
 

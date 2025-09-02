@@ -953,6 +953,7 @@ class WSI:
 
     def explain_slide(
             self,
+            attn_grad_rollout: VITAttentionGradRollout,
             patch_features_path: str,
             weights_path: str,
             slide_encoder: torch.nn.Module,
@@ -1008,16 +1009,6 @@ class WSI:
             ... )
             >>> print(relevancy_scores)  # Outputs the path of the relevancy scores.
         """
-        import h5py
-
-        # Set the slide encoder model to device and eval
-        slide_encoder.to(device)
-        slide_encoder.eval()
-
-        if not slide_encoder.enc_name.startswith('mean-'):
-            attn_grad_rollout = VITAttentionGradRollout(slide_encoder)
-        else:
-            attn_grad_rollout = None
 
         # Load patch-level features from h5 file
         with h5py.File(patch_features_path, 'r') as f:
@@ -1051,16 +1042,14 @@ class WSI:
 
         print(f"input shape {patch_features.shape}")
 
-        if slide_encoder.enc_name.startswith('mean-'):
+        if attn_grad_rollout is None:
             # Models without attention, just compute the product of weights and slide embeddings
             output = slide_encoder(batch, device)
             relevancy_scores = (output * weights)
             relevancy_scores = relevancy_scores.expand(coords.shape[1], relevancy_scores.shape[1])
         else:
-            # Generate slide-level relevancy scores
-            dt = 'cuda' if device.startswith('cuda') else 'cpu'
-            with torch.autocast(device_type=dt, enabled=(slide_encoder.precision != torch.float32)):
-                relevancy_scores = attn_grad_rollout(batch, weights, device=device)
+            attn_grad_rollout.reset_attention()
+            relevancy_scores = attn_grad_rollout(batch, weights, device=device)
         relevancy_scores = relevancy_scores.cpu().numpy()
         print(relevancy_scores.shape)
 
@@ -1068,13 +1057,14 @@ class WSI:
         os.makedirs(save_relevancy_scores, exist_ok=True)
         save_path = os.path.join(save_relevancy_scores, f'{self.name}.h5')
 
-        save_h5(os.path.join(save_relevancy_scores, f'{self.name}.h5'),
+        model_name = slide_encoder.enc_name if hasattr(slide_encoder, 'enc_name') else None
+        save_h5(save_path,
                 assets={
                     'relevancy_scores': relevancy_scores,
                     'coords': coords.cpu().numpy().squeeze(),
                 },
                 attributes={
-                    'relevancy_scores': {'name': self.name, 'savetodir': save_relevancy_scores},
+                    'relevancy_scores': {'name': self.name, 'savetodir': save_relevancy_scores, 'encoder': model_name},
                     'coords': coords_attrs
                 },
                 mode='w')
