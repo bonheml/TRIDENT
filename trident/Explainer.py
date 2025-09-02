@@ -1,9 +1,11 @@
 import gc
 
 import torch
+from einops import rearrange
+
 
 class VITAttentionGradRollout:
-    def __init__(self, model, use_layer_input=False, attention_layer_names=('attn_drop', 'attention_c'), discard_ratio=0.9):
+    def __init__(self, model, use_layer_input=False, attention_layer_names=('attn_drop', 'attention_c'), discard_ratio=0.9, is_mil_pooling=False):
         """An adaptation of the class proposed by [1] in https://github.com/jacobgil/vit-explain/blob/15a81d355a5aa6128ea4e71bbd56c28888d0f33b/vit_grad_rollout.py#L38
         :param model: the model to explain
         :param attention_layer_names: the name of the attention layers to target, defaults to 'attn_drop'
@@ -20,6 +22,7 @@ class VITAttentionGradRollout:
         self.register_hooks(attention_layer_names)
         self.attentions = []
         self.attention_gradients = []
+        self.is_mil_pooling = is_mil_pooling
 
     def register_hooks(self, attention_layer_names):
         """Register forward and backward hook for each layer with 'attention_layer_name' and store them.
@@ -59,7 +62,10 @@ class VITAttentionGradRollout:
         :param input: the input received by the module
         :param output: the module output, here we are interested in the attention values.
         """
-        self.attentions.append(output.detach().cpu())
+        attn = output.detach().cpu()
+        if self.is_mil_pooling:
+            attn = rearrange(attn, 'b n h -> b h n')
+        self.attentions.append(attn)
 
     def get_attention_gradient(self, module, grad_input, grad_output):
         """Add attention gradients obtained from backward hooks to the attention_gradients list.
@@ -68,7 +74,10 @@ class VITAttentionGradRollout:
         :param grad_input: the gradient received as input, here we are interested in the attention gradient.
         :param grad_output: the gradient produced as output.
         """
-        self.attention_gradients.append(grad_input[0].detach().cpu())
+        attn_grad = grad_input[0].detach().cpu()
+        if self.is_mil_pooling:
+            attn_grad = rearrange(attn_grad, 'b n h -> b h n')
+        self.attention_gradients.append(attn_grad)
 
     def grad_rollout_gildenblat(self):
         """ This is a slightly modified version of https://jacobgil.github.io/deeplearning/vision-transformer-explainability
@@ -129,10 +138,13 @@ class VITAttentionGradRollout:
         # Eq (9) of [1], normalises the results to account equally for the influence of the token on itself
         # and for the contextualisation.
         result = result / result.sum(dim=-1) + I
+
+        # Extract the relevancy score of all the image patches if MIL pooling
+        if self.is_mil_pooling:
+            return result[0]
         # Extract the relevancy score of all the image patches to the [CLS] token stored at index 0, which
         # holds the features of the entire image.
-        mask = result[0, 1:]
-        return mask
+        return result[0, 1:]
 
 
     def __call__(self, input_tensor, weights, method="Chefer", device="cuda"):

@@ -730,12 +730,12 @@ class Processor:
         if weights_dir is None:
             weights_dir = os.path.join(coords_dir, f'slide_contribs_{slide_encoder.enc_name}/{dt_name}')
 
-        slide_encoder.prepare_model_for_explainability()
+        is_mil_pooling = slide_encoder.prepare_model_for_explainability()
         slide_encoder.to(device)
         slide_encoder.eval()
 
         if not slide_encoder.enc_name.startswith('mean-'):
-            attn_grad_rollout = VITAttentionGradRollout(slide_encoder)
+            attn_grad_rollout = VITAttentionGradRollout(slide_encoder, is_mil_pooling=is_mil_pooling)
         else:
             attn_grad_rollout = None
 

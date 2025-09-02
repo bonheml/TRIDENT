@@ -110,7 +110,7 @@ class BaseSlideEncoder(torch.nn.Module):
         pass
 
     def prepare_model_for_explainability(self):
-        pass
+        return False
 
 class CustomSlideEncoder(BaseSlideEncoder):
     def __init__(
@@ -508,6 +508,9 @@ class FeatherSlideEncoder(BaseSlideEncoder):
         z, _ = self.model.forward_features(batch['features'].to(device))
         return z
 
+    def prepare_model_for_explainability(self):
+        return True
+
 
 class Tanglev2SlideEncoder(BaseSlideEncoder):
 
@@ -596,6 +599,9 @@ class Tanglev2SlideEncoder(BaseSlideEncoder):
     def forward(self, batch, device='cuda'):
         z = self.model.get_features(batch['features'].to(device))
         return z
+
+    def prepare_model_for_explainability(self):
+        return True
 
 
 class MeanSlideEncoder(BaseSlideEncoder):
