@@ -59,7 +59,7 @@ class VITAttentionGradRollout:
         :param input: the input received by the module
         :param output: the module output, here we are interested in the attention values.
         """
-        self.attentions.append(output)
+        self.attentions.append(output.detach().cpu())
 
     def get_attention_gradient(self, module, grad_input, grad_output):
         """Add attention gradients obtained from backward hooks to the attention_gradients list.
@@ -68,7 +68,7 @@ class VITAttentionGradRollout:
         :param grad_input: the gradient received as input, here we are interested in the attention gradient.
         :param grad_output: the gradient produced as output.
         """
-        self.attention_gradients.append(grad_input[0])
+        self.attention_gradients.append(grad_input[0].detach().cpu())
 
     def grad_rollout_gildenblat(self):
         """ This is a slightly modified version of https://jacobgil.github.io/deeplearning/vision-transformer-explainability
@@ -135,7 +135,7 @@ class VITAttentionGradRollout:
         return mask
 
 
-    def __call__(self, input_tensor, weights, method="Chefer", device="cuda:0"):
+    def __call__(self, input_tensor, weights, method="Chefer", device="cuda"):
         """Call the gradient rollout method using the forward and backward hooks previously registered.
 
         :param input_tensor: the input given to the model
@@ -152,7 +152,7 @@ class VITAttentionGradRollout:
         if method == "Gildenblat":
             res = self.grad_rollout_gildenblat()
         elif method == "Chefer":
-            res = self.grad_rollout_chefer(device=device)
+            res = self.grad_rollout_chefer()
         else:
             raise NotImplementedError(f"Method {method} is not implemented.")
 
