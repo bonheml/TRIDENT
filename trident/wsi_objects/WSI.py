@@ -1051,7 +1051,7 @@ class WSI:
             attn_grad_rollout.reset_attention()
             relevancy_scores = attn_grad_rollout(batch, weights, device=device)
         relevancy_scores = relevancy_scores.cpu().numpy()
-        print(relevancy_scores.shape)
+        print(f"Relevancy score shape {relevancy_scores.shape}")
 
         # Save slide-level features if save path is provided
         os.makedirs(save_relevancy_scores, exist_ok=True)

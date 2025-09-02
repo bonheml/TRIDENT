@@ -794,7 +794,6 @@ class Processor:
                     device=device
                 )
                 wsi.release()
-                attn_grad_rollout.remove_hooks()
 
                 remove_lock(slide_relevancy_path)
                 update_log(log_fp, f'{wsi.name}{wsi.ext}', 'Slide features extracted.')
@@ -807,6 +806,7 @@ class Processor:
                 else:
                     raise e
 
+        attn_grad_rollout.remove_hooks()
         return os.path.join(self.job_dir, saveto)
 
     def run_patch_explainability_job(
@@ -927,7 +927,6 @@ class Processor:
                     device=device
                 )
                 wsi.release()
-                attn_grad_rollout.remove_hooks()
 
                 remove_lock(wsi_feats_fp)
                 update_log(log_fp, f'{wsi.name}{wsi.ext}', 'Relevancy scores extracted.')
@@ -940,6 +939,7 @@ class Processor:
                 else:
                     raise e
 
+        attn_grad_rollout.remove_hooks()
         # Return the directory where the features are saved
         return os.path.join(self.job_dir, saveto)
 
