@@ -1,4 +1,7 @@
 from __future__ import annotations
+
+import tracemalloc
+
 import os
 import sys
 import torch.nn
@@ -886,7 +889,11 @@ class Processor:
         )
 
         self.loop = tqdm(self.wsis, desc=f'Extracting relevancy scores from coords in {coords_dir}', total=len(self.wsis))
+        tracemalloc.start()
+        i = 0
         for wsi in self.loop:
+            i += 1
+            snapshot1 = tracemalloc.take_snapshot()
             wsi_feats_fp = os.path.join(self.job_dir, saveto, f'{wsi.name}.{saveas}')
             # Check if features already exist
             if os.path.exists(wsi_feats_fp) and not is_locked(wsi_feats_fp):
@@ -926,7 +933,21 @@ class Processor:
                     save_features=os.path.join(self.job_dir, saveto),
                     device=device
                 )
+                snapshot2 = tracemalloc.take_snapshot()
                 wsi.release()
+                snapshot3 = tracemalloc.take_snapshot()
+                top_stats3 = snapshot3.statistics('lineno')
+                top_stats = snapshot2.compare_to(snapshot1, 'lineno')
+                top_stats_free = snapshot3.compare_to(snapshot1, 'lineno')
+                print(f"[ Top 10 differences before wsi release] - iteration {i}")
+                for stat in top_stats[:10]:
+                    print(stat)
+                print(f"[ Top 10 differences after wsi release] - iteration {i}")
+                for stat in top_stats_free[:10]:
+                    print(stat)
+                print(f"[ Top 10 usage after wsi release] - iteration {i}")
+                for stat in top_stats3[:10]:
+                    print(stat)
 
                 remove_lock(wsi_feats_fp)
                 update_log(log_fp, f'{wsi.name}{wsi.ext}', 'Relevancy scores extracted.')
@@ -939,6 +960,7 @@ class Processor:
                 else:
                     raise e
 
+        tracemalloc.stop()
         attn_grad_rollout.remove_hooks()
         # Return the directory where the features are saved
         return os.path.join(self.job_dir, saveto)
