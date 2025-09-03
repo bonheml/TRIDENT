@@ -1148,6 +1148,7 @@ class WSI:
             )
 
         dataset = WSIExplainerDataset(patcher, patch_transforms, weights)
+        print(f"Dataset of size {len(dataset)}")
         dataloader = DataLoader(dataset, batch_size=1,
                                 num_workers=get_num_workers(1, max_workers=self.max_workers),
                                 pin_memory=False)
