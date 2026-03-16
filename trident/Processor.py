@@ -1,6 +1,7 @@
 from __future__ import annotations
 import os
 import sys
+from contextlib import ExitStack
 from tqdm import tqdm
 from typing import Optional, List, Dict, Any
 from inspect import signature
@@ -8,9 +9,9 @@ import geopandas as gpd
 import pandas as pd 
 
 from trident import load_wsi, WSIReaderType
-from trident.IO import create_lock, remove_lock, is_locked, update_log, collect_valid_slides
+from trident.IO import create_lock, remove_lock, is_locked, update_log, collect_valid_slides, splitext
 from trident.Maintenance import deprecated
-from trident.Converter import OPENSLIDE_EXTENSIONS, PIL_EXTENSIONS
+from trident.wsi_objects.WSIFactory import OPENSLIDE_EXTENSIONS, PIL_EXTENSIONS, SDPC_EXTENSIONS
 
 
 class Processor:
@@ -55,7 +56,7 @@ class Processor:
                 [DEPRECATED as of v0.2.0] An optional directory for caching WSIs locally. If specified, slides will be copied 
                 from the source directory to this local directory before processing, improving performance 
                 when the source is a network drive. Defaults to None.
-            clear_cache (str, optional):
+            clear_cache (bool, optional):
                 [DEPRECATED as of v0.2.0] A flag indicating whether slides in the cache should be deleted after processing. 
                 This helps manage storage space. Defaults to False. 
             skip_errors (bool, optional): 
@@ -107,7 +108,7 @@ class Processor:
 
         self.job_dir = job_dir
         self.wsi_source = wsi_source
-        self.wsi_ext = wsi_ext or (list(PIL_EXTENSIONS) + list(OPENSLIDE_EXTENSIONS))
+        self.wsi_ext = wsi_ext or (list(PIL_EXTENSIONS) + list(OPENSLIDE_EXTENSIONS) + list(SDPC_EXTENSIONS))
         self.skip_errors = skip_errors
         self.custom_mpp_keys = custom_mpp_keys
         self.max_workers = max_workers
@@ -143,25 +144,32 @@ class Processor:
 
         # === Initialize WSIs ===
         self.wsis = []
-        for wsi_idx, abs_path in enumerate(full_paths):
-            name = os.path.basename(abs_path)
-            tissue_seg_path = os.path.join(
-                self.job_dir, 'contours_geojson',
-                f'{os.path.splitext(name)[0]}.geojson'
-            )
-            if not os.path.exists(tissue_seg_path):
-                tissue_seg_path = None
+        stack = ExitStack()
+        try:
+            for wsi_idx, abs_path in enumerate(full_paths):
+                name = os.path.basename(abs_path)
+                tissue_seg_path = os.path.join(
+                    self.job_dir, 'contours_geojson',
+                    f'{splitext(name)[0]}.geojson'
+                )
+                if not os.path.exists(tissue_seg_path):
+                    tissue_seg_path = None
 
-            slide = load_wsi(
-                slide_path=abs_path,
-                name=name,
-                tissue_seg_path=tissue_seg_path,
-                custom_mpp_keys=self.custom_mpp_keys,
-                mpp=valid_mpps[wsi_idx] if valid_mpps is not None else None,
-                max_workers=self.max_workers,
-                reader_type=reader_type,
-            )
-            self.wsis.append(slide)
+                slide = stack.enter_context(load_wsi(
+                    slide_path=abs_path,
+                    name=name,
+                    tissue_seg_path=tissue_seg_path,
+                    custom_mpp_keys=self.custom_mpp_keys,
+                    mpp=valid_mpps[wsi_idx] if valid_mpps is not None else None,
+                    max_workers=self.max_workers,
+                    reader_type=reader_type,
+                    lazy_init=True,
+                ))
+                self.wsis.append(slide)
+        except Exception:
+            stack.close()
+            raise
+        self._wsi_stack = stack
 
     def run_segmentation_job(
         self, 
@@ -260,10 +268,17 @@ class Processor:
                     self.loop.set_postfix_str(f'Empty GeoDataFrame for {wsi.name}.')
                 else:
                     update_log(os.path.join(self.job_dir,  '_logs_segmentation.txt'), f'{wsi.name}{wsi.ext}', 'Tissue segmented.')
-
+                
+                # Release WSI resources to prevent memory accumulation
+                wsi.release()
             except Exception as e:
                 if isinstance(e, KeyboardInterrupt):
                     remove_lock(os.path.join(saveto, f'{wsi.name}.jpg'))
+                # Release WSI resources even on error to prevent memory leaks
+                try:
+                    wsi.release()
+                except Exception:
+                    pass
                 if self.skip_errors:
                     update_log(os.path.join(self.job_dir, '_logs_segmentation.txt'), f'{wsi.name}{wsi.ext}', f'ERROR: {e}')
                     continue
@@ -384,9 +399,17 @@ class Processor:
 
                 remove_lock(os.path.join(self.job_dir, saveto, 'patches', f'{wsi.name}_patches.h5'))
                 update_log(os.path.join(self.job_dir, saveto, '_logs_coords.txt'), f'{wsi.name}{wsi.ext}', 'Coords generated')
+                
+                # Release WSI resources to prevent memory accumulation
+                wsi.release()
             except Exception as e:
                 if isinstance(e, KeyboardInterrupt):
                     remove_lock(os.path.join(self.job_dir, saveto, 'patches', f'{wsi.name}_patches.h5'))
+                # Release WSI resources even on error to prevent memory leaks
+                try:
+                    wsi.release()
+                except Exception:
+                    pass
                 if self.skip_errors:
                     update_log(os.path.join(self.job_dir, saveto, '_logs_coords.txt'), f'{wsi.name}{wsi.ext}', f'ERROR: {e}')
                     continue
@@ -499,7 +522,6 @@ class Processor:
                 create_lock(wsi_feats_fp)
                 update_log(log_fp, f'{wsi.name}{wsi.ext}', 'LOCKED. Extracting features...')
 
-                # under construction
                 wsi.extract_patch_features(
                     patch_encoder = patch_encoder,
                     coords_path = coords_path,
@@ -511,9 +533,17 @@ class Processor:
 
                 remove_lock(wsi_feats_fp)
                 update_log(log_fp, f'{wsi.name}{wsi.ext}', 'Features extracted.')
+                
+                # Release WSI resources to prevent memory accumulation
+                wsi.release()
             except Exception as e:
                 if isinstance(e, KeyboardInterrupt):
                     remove_lock(wsi_feats_fp)
+                # Release WSI resources even on error to prevent memory leaks
+                try:
+                    wsi.release()
+                except Exception:
+                    pass
                 if self.skip_errors:
                     update_log(log_fp, f'{wsi.name}{wsi.ext}', f'ERROR: {e}')
                     continue
@@ -646,9 +676,17 @@ class Processor:
 
                 remove_lock(slide_feature_path)
                 update_log(os.path.join(self.job_dir, coords_dir, f'_logs_slide_features_{slide_encoder.enc_name}.txt'), f'{wsi.name}{wsi.ext}', 'Slide features extracted.')
+                
+                # Release WSI resources to prevent memory accumulation
+                wsi.release()
             except Exception as e:
                 if isinstance(e, KeyboardInterrupt):
                     remove_lock(slide_feature_path)
+                # Release WSI resources even on error to prevent memory leaks
+                try:
+                    wsi.release()
+                except Exception:
+                    pass
                 if self.skip_errors:
                     update_log(os.path.join(self.job_dir, coords_dir, f'_logs_slide_features_{slide_encoder.enc_name}.txt'), f'{wsi.name}{wsi.ext}', f'ERROR: {e}')
                     continue
@@ -723,12 +761,18 @@ class Processor:
         Frees memory, closes file handles, and clears GPU memory.
         Should be called after processing is complete to avoid memory leaks.
         """
-        if hasattr(self, "wsis"):
+        if hasattr(self, "_wsi_stack") and self._wsi_stack is not None:
+            self._wsi_stack.close()
+            self._wsi_stack = None
+
+        elif hasattr(self, "wsis"):
             for wsi in self.wsis:
                 try:
                     wsi.release()
                 except Exception:
                     pass
+
+        if hasattr(self, "wsis"):
             self.wsis.clear()
 
         # Also clear loop references (e.g., tqdm)

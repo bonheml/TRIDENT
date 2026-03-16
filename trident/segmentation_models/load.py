@@ -1,3 +1,4 @@
+from typing import Dict, Any, Tuple
 import os
 import torch
 import torch.nn.functional as F
@@ -12,23 +13,30 @@ class SegmentationModel(torch.nn.Module):
 
     _has_internet = has_internet_connection()
 
-    def __init__(self, freeze=True, confidence_thresh=0.5, **build_kwargs):
+    def __init__(self, freeze: bool = True, confidence_thresh: float = 0.5, **build_kwargs: Dict[str, Any]):
         """
         Initialize Segmentation model wrapper.
 
-        Args:
-            freeze (bool, optional): If True, the model's parameters are frozen 
-                (i.e., not trainable) and the model is set to evaluation mode. 
-                Defaults to True.
-            confidence_thresh (float, optional): Threshold for prediction confidence. 
-                Predictions below this threshold may be filtered out or ignored. 
-                Default is 0.5. Set to 0.4 to keep more tissue.
-            **build_kwargs: Additional keyword arguments passed to the internal 
-                `_build` method.
+        Parameters
+        ----------
+        freeze : bool, optional
+            If True, the model's parameters are frozen 
+            (i.e., not trainable) and the model is set to evaluation mode. 
+            Defaults to True.
+        confidence_thresh : float, optional
+            Threshold for prediction confidence. 
+            Predictions below this threshold may be filtered out or ignored. 
+            Default is 0.5. Set to 0.4 to keep more tissue.
+        **build_kwargs : dict
+            Additional keyword arguments passed to the internal 
+            `_build` method.
 
-        Attributes:
-            model (torch.nn.Module): The constructed model.
-            eval_transforms (Callable): Transformations to apply to input data during inference.
+        Attributes
+        ----------
+        model : torch.nn.Module
+            The constructed model.
+        eval_transforms : Callable
+            Transformations to apply to input data during inference.
         """
         super().__init__()
         self.model, self.eval_transforms = self._build(**build_kwargs)
@@ -40,7 +48,7 @@ class SegmentationModel(torch.nn.Module):
                 param.requires_grad = False
             self.model.eval()
             
-    def forward(self, image):
+    def forward(self, image: torch.Tensor) -> torch.Tensor:
         """
         Can be overwritten if model requires special forward pass.
         """
@@ -48,7 +56,7 @@ class SegmentationModel(torch.nn.Module):
         return z
         
     @abstractmethod
-    def _build(self, **build_kwargs) -> tuple[nn.Module, transforms.Compose]:
+    def _build(self, **build_kwargs: Dict[str, Any]) -> Tuple[nn.Module, transforms.Compose]:
         """
         Build the segmentation model and preprocessing transforms.
         """
@@ -57,18 +65,20 @@ class SegmentationModel(torch.nn.Module):
 
 class HESTSegmenter(SegmentationModel):
 
-    def __init__(self, **build_kwargs):
+    def __init__(self, **build_kwargs: Dict[str, Any]):
         """
         HESTSegmenter initialization.
         """
         super().__init__(**build_kwargs)
 
-    def _build(self):
+    def _build(self) -> Tuple[nn.Module, transforms.Compose]:
         """
         Build and load HESTSegmenter model.
 
-        Returns:
-            Tuple[nn.Module, transforms.Compose]: Model and preprocessing transforms.
+        Returns
+        -------
+        Tuple[nn.Module, transforms.Compose]
+            Model and preprocessing transforms.
         """
 
         from torchvision.models.segmentation import deeplabv3_resnet50
@@ -316,7 +326,7 @@ class GrandQCSegmenter(SegmentationModel):
 
         # Model config
         self.input_size = 512
-        self.precision = torch.float32
+        self.precision = torch.float16
         self.target_mag = 1
 
         # Evaluation transforms
@@ -367,5 +377,8 @@ def segmentation_model_factory(
         return GrandQCSegmenter(freeze=freeze, confidence_thresh=confidence_thresh, **build_kwargs)
     elif model_name == 'grandqc_artifact':
         return GrandQCArtifactSegmenter(freeze=freeze, **build_kwargs)
+    elif model_name == 'otsu':
+        from trident.segmentation_models.otsu import OtsuSegmenter
+        return OtsuSegmenter(freeze=freeze, confidence_thresh=confidence_thresh, **build_kwargs)
     else:
         raise ValueError(f"Model type {model_name} not supported")

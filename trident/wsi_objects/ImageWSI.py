@@ -28,8 +28,8 @@ class ImageWSI(WSI):
         ValueError
             If the required 'mpp' argument is not provided.
 
-        Example
-        -------
+        Examples
+        --------
         >>> wsi = ImageWSI("path/to/image.png", lazy_init=False, mpp=0.51)
         >>> print(wsi)
         <width=5120, height=3840, backend=ImageWSI, mpp=0.51, mag=20>
@@ -79,7 +79,7 @@ class ImageWSI(WSI):
 
         super()._lazy_initialize()
 
-        if not self.lazy_init:
+        if not self._initialized:
             try:
                 self._ensure_image_open()
                 self.level_downsamples = [1]
@@ -89,7 +89,7 @@ class ImageWSI(WSI):
                 self.dimensions = self.img.size
                 self.level_dimensions = [(self.img.width, self.img.height)]
                 self.level_count = 1
-                self.lazy_init = True
+                self._initialized = True
 
             except Exception as e:
                 raise Exception(f"Error initializing WSI with PIL.Image: {e}")
@@ -153,8 +153,8 @@ class ImageWSI(WSI):
         ValueError
             If `level` is not 0 or if `read_as` is not one of the supported options.
 
-        Example
-        -------
+        Examples
+        --------
         >>> region = wsi.read_region((0, 0), level=0, size=(512, 512), read_as='numpy')
         >>> print(region.shape)
         (512, 512, 3)
@@ -209,3 +209,4 @@ class ImageWSI(WSI):
         if self.img is not None:
             self.img.close()
             self.img = None
+            self._initialized = False

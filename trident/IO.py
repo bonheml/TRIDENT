@@ -13,6 +13,18 @@ from geopandas import gpd
 from shapely import Polygon
 
 
+COMPOUND_EXTENSIONS = {'.ome.tif', '.ome.tiff'}
+
+
+def splitext(path: str) -> tuple:
+    """Like os.path.splitext but handles compound extensions (e.g., .ome.tif)."""
+    path_lower = path.lower()
+    for ext in COMPOUND_EXTENSIONS:
+        if path_lower.endswith(ext):
+            return path[:-len(ext)], path[-len(ext):]
+    return os.path.splitext(path)
+
+
 ENV_TRIDENT_HOME = "TRIDENT_HOME"
 ENV_XDG_CACHE_HOME = "XDG_CACHE_HOME"
 DEFAULT_CACHE_DIR = "~/.cache"
@@ -30,21 +42,30 @@ def collect_valid_slides(
     """
     Retrieve all valid WSI file paths from a directory, optionally filtered by a custom list.
 
-    Args:
-        wsi_dir (str): Path to the directory containing WSIs.
-        custom_list_path (Optional[str]): Path to a CSV file with 'wsi' column of relative slide paths.
-        wsi_ext (Optional[List[str]]): Allowed file extensions.
-        search_nested (bool): Whether to search subdirectories.
-        max_workers (int): Threads to use when checking file existence.
-        return_relative_paths (bool): Whether to also return relative paths.
+    Parameters
+    ----------
+    wsi_dir : str
+        Path to the directory containing WSIs.
+    custom_list_path : Optional[str]
+        Path to a CSV file with 'wsi' column of relative slide paths.
+    wsi_ext : Optional[List[str]]
+        Allowed file extensions.
+    search_nested : bool
+        Whether to search subdirectories.
+    max_workers : int
+        Threads to use when checking file existence.
+    return_relative_paths : bool
+        Whether to also return relative paths.
 
-    Returns:
-        List[str]: Full paths to valid WSIs.
-        OR
-        Tuple[List[str], List[str]]: (full paths, relative paths)
+    Returns
+    -------
+    Union[List[str], Tuple[List[str], List[str]]]
+        Full paths to valid WSIs, or (full paths, relative paths) if return_relative_paths is True.
     
-    Raises:
-        ValueError: If custom CSV is invalid or files not found.
+    Raises
+    ------
+    ValueError
+        If custom CSV is invalid or files not found.
     """
     valid_rel_paths: List[str] = []
 
@@ -121,14 +142,17 @@ def get_dir() -> str:
 def set_dir(d: Union[str, os.PathLike]) -> None:
     r"""
     Optionally set the Trident cache directory used to save downloaded models & weights.
-    Args:
-        d (str): path to a local folder to save downloaded models & weights.
+    
+    Parameters
+    ----------
+    d : Union[str, os.PathLike]
+        Path to a local folder to save downloaded models & weights.
     """
     global _cache_dir
     _cache_dir = os.path.expanduser(d)
 
 
-def _get_trident_home():
+def _get_trident_home() -> str:
     trident_home = os.path.expanduser(
         os.getenv(
             ENV_TRIDENT_HOME,
@@ -138,7 +162,7 @@ def _get_trident_home():
     return trident_home
 
 
-def has_internet_connection(timeout=3.0) -> bool:
+def has_internet_connection(timeout: float = 3.0) -> bool:
     endpoint = os.environ.get("HF_ENDPOINT", "huggingface.co")
     
     if endpoint.startswith(("http://", "https://")):
@@ -162,18 +186,25 @@ def has_internet_connection(timeout=3.0) -> bool:
         return False
 
 
-def get_weights_path(model_type, encoder_name):
+def get_weights_path(model_type: str, encoder_name: str) -> str:
     """
     Retrieve the path to the weights file for a given model name.
     This function looks up the path to the weights file in a local checkpoint
     registry (local_ckpts.json). If the path in the registry is absolute, it
     returns that path. If the path is relative, it joins the relative path with
     the provided weights_root directory.
-    Args:
-        weights_root (str): The root directory where weights files are stored.
-        name (str): The name of the model whose weights path is to be retrieved.
-    Returns:
-        str: The absolute path to the weights file.
+    
+    Parameters
+    ----------
+    model_type : str
+        The type of model ('patch', 'slide', or 'seg').
+    encoder_name : str
+        The name of the model whose weights path is to be retrieved.
+        
+    Returns
+    -------
+    str
+        The absolute path to the weights file.
     """
 
     assert model_type in ['patch', 'slide', 'seg'], f"Encoder type must be 'patch' or 'slide' or 'seg', not '{model_type}'"
@@ -196,26 +227,21 @@ def get_weights_path(model_type, encoder_name):
     return path
 
 
-def create_lock(path, suffix = None):
+def create_lock(path: str, suffix: Optional[str] = None) -> None:
     """
-    The `create_lock` function creates a lock file to signal that a particular file or process 
+    Create a lock file to signal that a particular file or process 
     is currently being worked on. This is especially useful in multiprocessing or distributed 
     systems to avoid conflicts or multiple processes working on the same resource.
 
-    Parameters:
-    -----------
+    Parameters
+    ----------
     path : str
         The path to the file or resource being locked.
     suffix : str, optional
         An additional suffix to append to the lock file name. This allows for creating distinct 
         lock files for similar resources. Defaults to None.
 
-    Returns:
-    --------
-    None
-        The function creates a `.lock` file in the specified path and does not return anything.
-
-    Example:
+    Examples
     --------
     >>> create_lock("/path/to/resource")
     >>> # Creates a file named "/path/to/resource.lock" to indicate the resource is locked.
@@ -228,24 +254,19 @@ def create_lock(path, suffix = None):
 
 #####################
 
-def remove_lock(path, suffix = None):
+def remove_lock(path: str, suffix: Optional[str] = None) -> None:
     """
-    The `remove_lock` function removes a lock file, signaling that the file or process 
+    Remove a lock file, signaling that the file or process 
     is no longer in use and is available for other operations.
 
-    Parameters:
-    -----------
+    Parameters
+    ----------
     path : str
         The path to the file or resource whose lock needs to be removed.
     suffix : str, optional
         An additional suffix to identify the lock file. Defaults to None.
 
-    Returns:
-    --------
-    None
-        The function deletes the `.lock` file associated with the resource.
-
-    Example:
+    Examples
     --------
     >>> remove_lock("/path/to/resource")
     >>> # Removes the file "/path/to/resource.lock", indicating the resource is unlocked.
@@ -257,24 +278,24 @@ def remove_lock(path, suffix = None):
 
 #####################
 
-def is_locked(path, suffix = None):
+def is_locked(path: str, suffix: Optional[str] = None) -> bool:
     """
-    The `is_locked` function checks if a resource is currently locked by verifying 
+    Check if a resource is currently locked by verifying 
     the existence of a `.lock` file.
 
-    Parameters:
-    -----------
+    Parameters
+    ----------
     path : str
         The path to the file or resource to check for a lock.
     suffix : str, optional
         An additional suffix to identify the lock file. Defaults to None.
 
-    Returns:
-    --------
+    Returns
+    -------
     bool
         True if the `.lock` file exists, indicating the resource is locked. False otherwise.
 
-    Example:
+    Examples
     --------
     >>> is_locked("/path/to/resource")
     False
@@ -530,8 +551,18 @@ def coords_to_h5(
     overlap
 ):
     """ Save tissue coordinates to .h5 """
+    coords_array = np.asarray(coords, dtype=np.int64)
+    if coords_array.size == 0:
+        coords_array = coords_array.reshape(0, 2)
+    elif coords_array.ndim == 1 and coords_array.shape[0] == 2:
+        coords_array = coords_array.reshape(1, 2)
+    elif coords_array.ndim != 2 or coords_array.shape[1] != 2:
+        raise ValueError(
+            f"coords must have shape (N, 2). Got shape {coords_array.shape}."
+        )
+
     # Prepare assets for saving
-    assets = {'coords' : np.array(coords)}
+    assets = {'coords' : coords_array}
     attributes = {
         'patch_size': patch_size, # Reference frame: patch_level
         'patch_size_level0': patch_size * src_mag // target_mag, # Reference frame: level0
@@ -858,7 +889,6 @@ def overlay_gdf_on_thumbnail(
     cropped_annotated = cv2.cvtColor(cropped_annotated, cv2.COLOR_BGR2RGB)
     cv2.imwrite(contours_saveto, cropped_annotated)
 
-# .tools.register_tool(imports=["import numpy as np"])
 def get_num_workers(batch_size: int, 
                     factor: float = 0.75, 
                     fallback: int = 16, 

@@ -1,17 +1,15 @@
 from __future__ import annotations
 import numpy as np
-import openslide
 from PIL import Image
-from typing import List, Tuple, Union, Optional, Any
-
+from typing import Tuple, Union
 from trident.wsi_objects.WSI import WSI, ReadMode
 
 
-class OpenSlideWSI(WSI):
+class SDPCWSI(WSI):
 
-    def __init__(self, slide_path: str, **kwargs: Any) -> None:
+    def __init__(self, slide_path, **kwargs) -> None:
         """
-        Initialize an OpenSlideWSI instance.
+        Initialize an SDPCWSI instance.
 
         Parameters
         ----------
@@ -25,17 +23,17 @@ class OpenSlideWSI(WSI):
 
         Examples
         --------
-        >>> wsi = OpenSlideWSI(slide_path="path/to/wsi.svs", lazy_init=False)
+        >>> wsi = SDPCWSI(slide_path="path/to/wsi.svs", lazy_init=False)
         >>> print(wsi)
-        <width=100000, height=80000, backend=OpenSlideWSI, mpp=0.25, mag=40>
+        <width=100000, height=80000, backend=SDPCWSI, mpp=0.25, mag=40>
         """
         super().__init__(slide_path, **kwargs)
 
     def _lazy_initialize(self) -> None:
         """
-        Lazily initialize the WSI using OpenSlide.
+        Lazily initialize the WSI using OpenSDPC.
 
-        This method opens a whole-slide image using the OpenSlide backend, extracting
+        This method opens a whole-slide image using the OpenSdpc backend, extracting
         key metadata including dimensions, magnification, and multiresolution pyramid
         information. If a tissue segmentation mask is provided, it is also loaded.
 
@@ -54,123 +52,62 @@ class OpenSlideWSI(WSI):
         - `level_count`: number of resolution levels in the image pyramid.
         - `level_downsamples`: downsampling factors for each level.
         - `level_dimensions`: image dimensions at each level.
-        - `properties`: metadata dictionary from OpenSlide.
+        - `properties`: None for Sdpc Format.
         - `mpp`: microns per pixel, inferred if not manually specified.
         - `mag`: estimated magnification level.
         - `gdf_contours`: loaded from `tissue_seg_path` if provided.
         """
 
+        try:
+            import opensdpc
+        except ImportError:
+            raise ImportError("The opensdpc package is not installed. Please install it using `pip install opensdpc`.")
+        
         super()._lazy_initialize()
 
         if not self._initialized:
             try:
-                self.img = openslide.OpenSlide(self.slide_path)
-                # set openslide attrs as self
+                self.img = opensdpc.OpenSdpc(self.slide_path)
                 self.dimensions = self.get_dimensions()
                 self.width, self.height = self.dimensions
                 self.level_count = self.img.level_count
                 self.level_downsamples = self.img.level_downsamples
                 self.level_dimensions = self.img.level_dimensions
-                self.properties = self.img.properties
+                self.properties = None
                 if self.mpp is None:
-                    self.mpp = self._fetch_mpp(self.custom_mpp_keys)
-                self.mag = self._fetch_magnification(self.custom_mpp_keys)
+                    self.mpp = self.img.readSdpc(self.slide_path).contents.picHead.contents.ruler
+                self.mag = self.img.scan_magnification
                 self._initialized = True
 
             except Exception as e:
-                raise RuntimeError(f"Failed to initialize WSI with OpenSlide: {e}") from e
+                raise RuntimeError(f"Failed to initialize WSI with OpenSdpc: {e}") from e
 
-    def _fetch_mpp(self, custom_mpp_keys: Optional[List[str]] = None) -> float:
+    def _get_closed_thumbnail_level(self, size: Tuple[int, int]) -> int:
         """
-        Retrieve microns per pixel (MPP) from OpenSlide metadata.
+        Determine the most appropriate pyramid level for generating a thumbnail
+        of the specified size.
 
         Parameters
         ----------
-        custom_mpp_keys : list of str, optional
-            Additional metadata keys to check for MPP.
-
-        Returns
-        -------
-        float
-            MPP value in microns per pixel.
-
-        Raises
-        ------
-        ValueError
-            If MPP cannot be determined from metadata.
-        """
-        mpp_keys = [
-            openslide.PROPERTY_NAME_MPP_X,
-            'openslide.mirax.MPP',
-            'aperio.MPP',
-            'hamamatsu.XResolution',
-            'openslide.comment',
-        ]
-
-        if custom_mpp_keys:
-            mpp_keys.extend(custom_mpp_keys)
-
-        for key in mpp_keys:
-            if key in self.img.properties:
-                try:
-                    mpp_x = float(self.img.properties[key])
-                    return round(mpp_x, 4)
-                except ValueError:
-                    continue
-
-        x_resolution = self.img.properties.get('tiff.XResolution')
-        unit = self.img.properties.get('tiff.ResolutionUnit')
-
-        if x_resolution and unit:
-            try:
-                if unit.lower() == 'centimeter':
-                    return round(10000 / float(x_resolution), 4)
-                elif unit.upper() == 'INCH':
-                    return round(25400 / float(x_resolution), 4)
-            except ValueError:
-                pass
-
-        raise ValueError(
-            f"Unable to extract MPP from slide metadata: '{self.slide_path}'.\n"
-            "Suggestions:\n"
-            "- Provide `custom_mpp_keys` to specify metadata keys to look for.\n"
-            "- Set the MPP explicitly via the class constructor.\n"
-            "- If using the `run_batch_of_slides.py` script, pass the MPP via the "
-            "`--custom_list_of_wsis` argument in a CSV file. Refer to TRIDENT/README/Q&A."
-        )
-
-    def _fetch_magnification(self, custom_mpp_keys: Optional[List[str]] = None) -> int:
-
-        """
-        Retrieve estimated magnification from metadata.
-
-        Parameters
-        ----------
-        custom_mpp_keys : list of str, optional
-            Keys to aid in computing magnification from MPP.
+        size : tuple of int
+            Desired (width, height) of the thumbnail.
 
         Returns
         -------
         int
-            Estimated magnification.
+            Pyramid level index that best matches the requested thumbnail size.
 
-        Raises
-        ------
-        ValueError
-            If magnification cannot be determined.
+        Notes
+        -----
+        This method selects the highest resolution level where both dimensions
+        are greater than or equal to the requested size. If no such level exists,
+        it returns the lowest resolution level (highest index).
         """
-        mag = super()._fetch_magnification(custom_mpp_keys)
-        if mag is not None:
-            return mag
-
-        metadata_mag = self.img.properties.get(openslide.PROPERTY_NAME_OBJECTIVE_POWER)
-        if metadata_mag is not None:
-            try:
-                return int(metadata_mag)
-            except ValueError:
-                pass
-
-        raise ValueError(f"Unable to determine magnification from metadata for: {self.slide_path}")
+        for level in range(self.level_count):
+            level_width, level_height = self.level_dimensions[level]
+            if level_width <= size[0] and level_height <= size[1]:
+                return max(0, level - 1)
+        return self.level_count - 1
 
     def read_region(
         self,
@@ -229,7 +166,7 @@ class OpenSlideWSI(WSI):
         tuple of int
             (width, height) in pixels.
         """
-        return self.img.dimensions
+        return self.img.level_dimensions[0]
 
     def get_thumbnail(self, size: tuple[int, int]) -> Image.Image:
         """
@@ -245,4 +182,8 @@ class OpenSlideWSI(WSI):
         PIL.Image.Image
             RGB thumbnail as a PIL Image.
         """
-        return self.img.get_thumbnail(size).convert('RGB')
+        closest_level = self._get_closed_thumbnail_level(size)
+        level_width, level_height = self.level_dimensions[closest_level]
+        thumbnail = self.read_region((0, 0), closest_level, (level_width, level_height), read_as='pil')
+        thumbnail = thumbnail.resize(size, Image.LANCZOS)
+        return thumbnail

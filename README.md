@@ -1,7 +1,7 @@
 # 🔱   Trident
 
  [arXiv](https://arxiv.org/pdf/2502.06750) | [Blog](https://www.linkedin.com/pulse/announcing-new-open-source-tools-accelerate-ai-pathology-andrew-zhang-loape/?trackingId=pDkifo54SRuJ2QeGiGcXpQ%3D%3D) | [Cite](https://github.com/mahmoodlab/trident?tab=readme-ov-file#reference)
- | [Documentation](https://trident-docs.readthedocs.io/en/latest/) | [License](https://github.com/mahmoodlab/trident?tab=License-1-ov-file)
+| [Documentation](https://trident-docs.readthedocs.io/en/latest/) | [License](https://github.com/mahmoodlab/trident?tab=License-1-ov-file)
  
 Trident is a toolkit for large-scale whole-slide image processing.
 This project was developed by the [Mahmood Lab](https://faisal.ai/) at Harvard Medical School and Brigham and Women's Hospital. This work was funded by NIH NIGMS R35GM138216.
@@ -24,22 +24,51 @@ This project was developed by the [Mahmood Lab](https://faisal.ai/) at Harvard M
 - 04.25: Native support for PIL.Image and CuCIM (use `wsi = load_wsi(xxx.svs)`). Support for seg + patch encoding without Internet.
 - 04.25: Remove artifacts/penmarks from the tissue segmentation with `--remove_artifacts` and `--remove_penmarks`. 
 - 02.25: New image converter from `czi`, `png`, etc to `tiff`.
-- 02.25: Support for [GrandQC](https://www.nature.com/articles/s41467-024-54769-y) tissue vs. background segmentation.
+- 02.25: Support for GrandQC([Citation necessary](https://www.nature.com/articles/s41467-024-54769-y), [Non-commercial use](https://creativecommons.org/licenses/by-nc-sa/4.0/), [Original repository](https://github.com/cpath-ukk/grandqc)) tissue vs. background segmentation.
 - 02.25: Support for [Madeleine](https://github.com/mahmoodlab/MADELEINE/tree/main), [Hibou](https://github.com/HistAI/hibou), [Lunit](https://huggingface.co/1aurent/vit_small_patch8_224.lunit_dino), [Kaiko](https://huggingface.co/histai/hibou-L), and [H-Optimus-1](https://huggingface.co/bioptimus/H-optimus-1) models.
 
+> [!NOTE]
+> GrandQC is integrated into Trident under the CC BY-NC-SA 4.0 license. If you use GrandQC, please cite their [original publication](https://www.nature.com/articles/s41467-024-54769-y).
+
+
 ### 🔨 1. **Installation**:
-- Create an environment: `conda create -n "trident" python=3.10`, and activate it `conda activate trident`.
+- Create an environment (Python 3.10 or 3.11): `conda create -n "trident" python=3.10`, and activate it `conda activate trident`.
 - Cloning: `git clone https://github.com/mahmoodlab/trident.git && cd trident`.
 - Local installation: `pip install -e .`.
+  - This installs the shared model stack (`transformers`, `timm`, `safetensors`, etc.).
 
-Additional packages may be required to load some pretrained models. Follow error messages for instructions.
+Optional install profiles:
+- `pip install -e ".[patch-encoders]"` for CONCH/MUSK/CTransPath-related extras.
+- `pip install -e ".[slide-encoders]"` for PRISM/GigaPath/Madeleine-related extras.
+- `pip install -e ".[convert]"` for slide conversion dependencies.
+- `pip install -e ".[full]"` to install all pip-installable optional dependencies.
+
+Run checks before launching jobs:
+- `trident-doctor --profile base`
+- `trident-doctor --profile patch-encoders --check-gated`
+- `trident-doctor --profile slide-encoders`
+- `trident-doctor --profile convert`
+- `trident-doctor --profile full --check-gated`
+
+> [!NOTE]
+> Some models still require manual setup (e.g., local CHIEF repository path in `trident/slide_encoder_models/local_ckpts.json`) or HuggingFace gated access approvals.
 
 ### 🔨 2. **Running Trident**:
+
+CLI options (all are supported):
+- `python run_batch_of_slides.py ...` (existing command)
+- `python run_single_slide.py ...` (existing command)
+- `trident batch ...`, `trident single ...`, `trident convert ...`, and `trident doctor ...` (wrapper CLI)
 
 **Already familiar with WSI processing?** Perform segmentation, patching, and UNI feature extraction from a directory of WSIs with:
 
 ```
 python run_batch_of_slides.py --task all --wsi_dir ./wsis --job_dir ./trident_processed --patch_encoder uni_v1 --mag 20 --patch_size 256
+```
+
+Equivalent wrapper CLI:
+```
+trident batch -- --task all --wsi_dir ./wsis --job_dir ./trident_processed --patch_encoder uni_v1 --mag 20 --patch_size 256
 ```
 
 **Feeling cautious?**
@@ -48,6 +77,18 @@ Run this command to perform all processing steps for a **single** slide:
 ```
 python run_single_slide.py --slide_path ./wsis/xxxx.svs --job_dir ./trident_processed --patch_encoder uni_v1 --mag 20 --patch_size 256
 ```
+
+Equivalent wrapper CLI:
+```
+trident single -- --slide_path ./wsis/xxxx.svs --job_dir ./trident_processed --patch_encoder uni_v1 --mag 20 --patch_size 256
+```
+
+Convert images/WSIs to pyramidal TIFF:
+```
+trident convert --input_dir ./wsis --mpp_csv ./wsis/to_process.csv --job_dir ./pyramidal_tiff --downscale_by 1 --num_workers 1
+```
+`--mpp_csv` is required and must contain `wsi,mpp` columns. Only files listed in the CSV are converted.
+If embedded MPP metadata is detected in a slide, Trident compares it to the CSV value and logs mismatches.
 
 **Or follow step-by-step instructions:**
 
@@ -60,7 +101,7 @@ python run_single_slide.py --slide_path ./wsis/xxxx.svs --job_dir ./trident_proc
    - `--wsi_dir ./wsis`: Path to dir with your WSIs.
    - `--job_dir ./trident_processed`: Output dir for processed results.
    - `--gpu 0`: Uses GPU with index 0.
-   - `--segmenter`: Segmentation model. Defaults to `hest`. Switch to `grandqc` for fast H&E segmentation. Add the option `--remove_artifacts` for additional artifact clean up.
+  - `--segmenter`: Segmentation model. Defaults to `hest`. Use `grandqc` ([Citation necessary](https://www.nature.com/articles/s41467-024-54769-y), [Non-commercial use](https://creativecommons.org/licenses/by-nc-sa/4.0/), [Original repository](https://github.com/cpath-ukk/grandqc)) for fast H&E segmentation or `otsu` for a classical image-processing-only fallback. Add the option `--remove_artifacts` for additional artifact clean up.
  - **Outputs**:
    - WSI thumbnails in `./trident_processed/thumbnails`.
    - WSI thumbnails with tissue contours in `./trident_processed/contours`.
@@ -95,7 +136,7 @@ python run_single_slide.py --slide_path ./wsis/xxxx.svs --job_dir ./trident_proc
  - **Outputs**: 
    - Features are saved as h5 files in `./trident_processed/20x_256px/features_uni_v1`. (Shape: `(n_patches, feature_dim)`)
 
-Trident supports 21 patch encoders, loaded via a patch [`encoder_factory`](https://github.com/mahmoodlab/trident/blob/main/trident/patch_encoder_models/load.py#L14). Models requiring specific installations will return error messages with additional instructions. Gated models on HuggingFace require access requests.
+Trident supports 24 patch encoders, loaded via a patch [`encoder_factory`](https://github.com/mahmoodlab/trident/blob/main/trident/patch_encoder_models/load.py#L14). Models requiring specific installations will return error messages with additional instructions. Gated models on HuggingFace require access requests.
 
 | Patch Encoder         | Embedding Dim | Args                                                             | Link |
 |-----------------------|---------------:|------------------------------------------------------------------|------|
@@ -110,8 +151,11 @@ Trident supports 21 patch encoders, loaded via a patch [`encoder_factory`](https
 | **Prov-Gigapath**     | 1536           | `--patch_encoder gigapath --patch_size 256 --mag 20`             | [prov-gigapath](https://huggingface.co/prov-gigapath/prov-gigapath) |
 | **H-Optimus-0**       | 1536           | `--patch_encoder hoptimus0 --patch_size 224 --mag 20`            | [bioptimus/H-optimus-0](https://huggingface.co/bioptimus/H-optimus-0) |
 | **H-Optimus-1**       | 1536           | `--patch_encoder hoptimus1 --patch_size 224 --mag 20`            | [bioptimus/H-optimus-1](https://huggingface.co/bioptimus/H-optimus-1) |
+| **H0-mini**           | 768/1536       | `--patch_encoder h0-mini --patch_size 224 --mag 20`              | [bioptimus/H0-mini](https://huggingface.co/bioptimus/H0-mini) |
 | **MUSK**              | 1024           | `--patch_encoder musk --patch_size 384 --mag 20`                 | [xiangjx/musk](https://huggingface.co/xiangjx/musk) |
 | **Midnight-12k**      | 3072           | `--patch_encoder midnight12k --patch_size 224 --mag 20`          | [kaiko-ai/midnight](https://huggingface.co/kaiko-ai/midnight) |
+| **OpenMidnight**      | 1536           | `--patch_encoder openmidnight --patch_size 224 --mag 20`         | [SophontAI/OpenMidnight](https://huggingface.co/SophontAI/OpenMidnight) |
+| **GPFM**              | 1024           | `--patch_encoder gpfm --patch_size 224 --mag 20`                 | [majiabo/GPFM](https://huggingface.co/majiabo/GPFM) |
 | **Kaiko**             | 384/768/1024   | `--patch_encoder {kaiko-vits8, kaiko-vits16, kaiko-vitb8, kaiko-vitb16, kaiko-vitl14} --patch_size 256 --mag 20` | [1aurent/kaikoai-models-66636c99d8e1e34bc6dcf795](https://huggingface.co/collections/1aurent/kaikoai-models-66636c99d8e1e34bc6dcf795) |
 | **Lunit**             | 384            | `--patch_encoder lunit-vits8 --patch_size 224 --mag 20`          | [1aurent/vit_small_patch8_224.lunit_dino](https://huggingface.co/1aurent/vit_small_patch8_224.lunit_dino) |
 | **Hibou**             | 1024           | `--patch_encoder hibou_l --patch_size 224 --mag 20`              | [histai/hibou-L](https://huggingface.co/histai/hibou-L) |
@@ -181,13 +225,13 @@ main()
 
 - **Q**: I am not satisfied with the tissue vs background segmentation. What can I do?
    - **A**: Trident uses GeoJSON to store and load segmentations. This format is natively supported by [QuPath](https://qupath.github.io/). You can load the Trident segmentation into QuPath, modify it using QuPath's annotation tools, and save the updated segmentation back to GeoJSON.
-   - **A**: You can try another segmentation model by specifying `segmenter --grandqc`.
+   - **A**: You can try another segmentation model by specifying `--segmenter grandqc` ([Citation necessary](https://www.nature.com/articles/s41467-024-54769-y), [Non-commercial use](https://creativecommons.org/licenses/by-nc-sa/4.0/), [Original repository](https://github.com/cpath-ukk/grandqc)) or `--segmenter otsu`.
 
 - **Q**: I want to process a custom list of WSIs. Can I do it? Also, most of my WSIs don't have the micron per pixel (mpp) stored. Can I pass it?
    - **A**: Yes using the `--custom_list_of_wsis` argument. Provide a list of WSI names in a CSV (with slide extension, `wsi`). Optionally, provide the mpp (field `mpp`)
  
  - **Q**: Do I need to install any additional packages to use Trident?
-   - **A**: Most pretrained models require additional dependencies (e.g., the CTransPath patch encoder requires `pip install timm_ctp`). When you load a model using Trident, it will tell you what dependencies are missing and how to install them. 
+   - **A**: `pip install -e .` installs core dependencies. Some optional components still require extra installs. Use profiles (`.[patch-encoders]`, `.[slide-encoders]`, `.[convert]`, or `.[full]`) and run `trident-doctor` for preflight checks.
 
 ## License and Terms of Use
 
@@ -200,7 +244,7 @@ The project was built on top of amazing repositories such as [Timm](https://gith
 ## Issues
 
 - The preferred mode of communication is via GitHub issues.
-- If GitHub issues are inappropriate, email gjaume@bwh.harvard.edu and andrewzh@mit.edu.
+- If GitHub issues are inappropriate, email guillaume.jaume@unil.ch and andrewzh@mit.edu.
 - Immediate response to minor issues may not be available.
 
 ## Funding

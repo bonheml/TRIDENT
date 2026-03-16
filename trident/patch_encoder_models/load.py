@@ -1,6 +1,6 @@
 import traceback
 from abc import abstractmethod
-from typing import Literal, Optional
+from typing import Literal, Optional, Any, Dict, Tuple, Callable
 import torch
 import os 
 
@@ -12,7 +12,7 @@ from trident.IO import get_weights_path, has_internet_connection
 This file contains 20+ pretrained patch encoders, all loadable via the encoder_factory() function.
 """
 
-def encoder_factory(model_name: str, **kwargs):
+def encoder_factory(model_name: str, **kwargs) -> torch.nn.Module:
     """
     Instantiate a patch encoder model by name.
 
@@ -20,42 +20,63 @@ def encoder_factory(model_name: str, **kwargs):
     `model_name`. Each encoder is designed for extracting representations from image patches
     using specific backbones or pretraining strategies.
 
-    Args:
-        model_name (str): Name of the encoder to instantiate. Must be one of the following:
-            - "conch_v1"
-            - "conch_v15"
-            - "uni_v1"
-            - "uni_v2"
-            - "ctranspath"
-            - "phikon"
-            - "phikon_v2"
-            - "resnet50"
-            - "gigapath"
-            - "virchow"
-            - "virchow2"
-            - "hoptimus0"
-            - "hoptimus1"
-            - "musk"
-            - "hibou_l"
-            - "kaiko-vitb8"
-            - "kaiko-vitb16"
-            - "kaiko-vits8"
-            - "kaiko-vits16"
-            - "kaiko-vitl14"
-            - "lunit-vits8"
+    Parameters
+    ----------
+    model_name : str
+        Name of the encoder to instantiate. Must be one of the following:
+        - "conch_v1"
+        - "conch_v15"
+        - "uni_v1"
+        - "uni_v2"
+        - "ctranspath"
+        - "phikon"
+        - "phikon_v2"
+        - "resnet50"
+        - "gigapath"
+        - "virchow"
+        - "virchow2"
+        - "hoptimus0"
+        - "hoptimus1"
+        - "h0-mini"
+        - "musk"
+        - "openmidnight"
+        - "gpfm"
+        - "hibou_l"
+        - "kaiko-vitb8"
+        - "kaiko-vitb16"
+        - "kaiko-vits8"
+        - "kaiko-vits16"
+        - "kaiko-vitl14"
+        - "lunit-vits8"
 
-        **kwargs: Optional keyword arguments passed directly to the encoder constructor. These
-            may include parameters such as:
-            - weights_path (str): Path to a local checkpoint (optional)
-            - normalize (bool): Whether to normalize output embeddings (default: False)
-            - with_proj (bool): Whether to apply the projection head (default: True)
-            - any model-specific configuration parameters
+    **kwargs : dict
+        Optional keyword arguments passed directly to the encoder constructor. These
+        may include parameters such as:
+        - weights_path (str): Path to a local checkpoint (optional)
+        - normalize (bool): Whether to normalize output embeddings (default: False)
+        - with_proj (bool): Whether to apply the projection head (default: True)
+        - any model-specific configuration parameters
 
-    Returns:
-        torch.nn.Module: An instance of the specified encoder model.
+    Returns
+    -------
+    torch.nn.Module
+        An instance of the specified encoder model.
 
-    Raises:
-        ValueError: If `model_name` is not among the recognized encoder names.
+    Raises
+    ------
+    ValueError
+        If `model_name` is not among the recognized encoder names.
+
+    Examples
+    --------
+    >>> # Load a high-performance vision transformer
+    >>> encoder = encoder_factory("conch_v15")
+    >>> 
+    >>> # Load with custom weights
+    >>> encoder = encoder_factory("uni_v2", weights_path="custom_weights.pth")
+    >>> 
+    >>> # Load a fast CNN model
+    >>> encoder = encoder_factory("ctranspath")
     """
     if model_name in encoder_registry:
         return encoder_registry[model_name](**kwargs)
@@ -67,22 +88,29 @@ class BasePatchEncoder(torch.nn.Module):
 
     _has_internet = has_internet_connection()
     
-    def __init__(self, weights_path: Optional[str] = None, **build_kwargs):
+    def __init__(self, weights_path: Optional[str] = None, **build_kwargs: Dict[str, Any]):
         """
         Initialize BasePatchEncoder.
 
-        Args:
-            weights_path (Optional[str]): 
-                Optional path to local model weights. If None, the model is loaded from the model registry or downloaded from Hugging Face Hub.
-            **build_kwargs: 
-                Additional keyword arguments passed to the `_build()` method to customize model creation.
+        Parameters
+        ----------
+        weights_path : Optional[str]
+            Optional path to local model weights. If None, the model is loaded from the model registry or downloaded from Hugging Face Hub.
+        **build_kwargs : dict
+            Additional keyword arguments passed to the `_build()` method to customize model creation.
 
-        Attributes:
-            enc_name (Optional[str]): Name of the encoder architecture (set during `_build()`).
-            weights_path (Optional[str]): Path to local model weights (if provided).
-            model (nn.Module): The instantiated encoder model.
-            eval_transforms (Callable): Evaluation-time preprocessing transforms.
-            precision (torch.dtype): Precision used for inference.
+        Attributes
+        ----------
+        enc_name : Optional[str]
+            Name of the encoder architecture (set during `_build()`).
+        weights_path : Optional[str]
+            Path to local model weights (if provided).
+        model : nn.Module
+            The instantiated encoder model.
+        eval_transforms : Callable
+            Evaluation-time preprocessing transforms.
+        precision : torch.dtype
+            Precision used for inference.
         """
 
         super().__init__()
@@ -90,11 +118,11 @@ class BasePatchEncoder(torch.nn.Module):
         self.weights_path: Optional[str] = weights_path
         self.model, self.eval_transforms, self.precision = self._build(**build_kwargs)
 
-    def ensure_valid_weights_path(self, weights_path):
+    def ensure_valid_weights_path(self, weights_path: str) -> None:
         if weights_path and not os.path.isfile(weights_path):
             raise FileNotFoundError(f"Expected checkpoint at '{weights_path}', but the file was not found.")
     
-    def ensure_has_internet(self, enc_name):
+    def ensure_has_internet(self, enc_name: str) -> None:
         if not BasePatchEncoder._has_internet:
             raise FileNotFoundError(
                 f"Internet connection does seem not available. Auto checkpoint download is disabled."
@@ -102,7 +130,7 @@ class BasePatchEncoder(torch.nn.Module):
                 f"and place it in the model registry in:\n`trident/patch_encoder_models/local_ckpts.json`"
             )
         
-    def _get_weights_path(self):
+    def _get_weights_path(self) -> str:
         """
         If self.weights_path is provided, use it. 
         If not provided, check the model registry. 
@@ -117,7 +145,7 @@ class BasePatchEncoder(torch.nn.Module):
             self.ensure_valid_weights_path(weights_path)
             return weights_path
 
-    def forward(self, x):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
         Can be overwritten if model requires special forward pass.
         """
@@ -125,25 +153,26 @@ class BasePatchEncoder(torch.nn.Module):
         return z
         
     @abstractmethod
-    def _build(self, **build_kwargs):
+    def _build(self, **build_kwargs: Dict[str, Any]) -> Tuple[torch.nn.Module, Callable, torch.dtype]:
         pass
 
 
 class CustomInferenceEncoder(BasePatchEncoder):
 
-    def __init__(self, enc_name, model, transforms, precision):
+    def __init__(self, enc_name: str, model: torch.nn.Module, transforms: Callable, precision: torch.dtype):
         """
         Initialize a CustomInferenceEncoder from user-defined components.
 
         This class is used when the model, transforms, and precision are pre-instantiated externally 
         and should be injected directly into the encoder wrapper.
 
-        Args:
-            enc_name (str): 
-                A unique name or identifier for the encoder (used for registry or logging).
-            model (torch.nn.Module): 
-                A PyTorch model instance to use for inference.
-            transforms (Callable): 
+        Parameters
+        ----------
+        enc_name : str
+            A unique name or identifier for the encoder (used for registry or logging).
+        model : torch.nn.Module
+            A PyTorch model instance to use for inference.
+        transforms : Callable 
                 A callable (e.g., torchvision or timm transform) to preprocess input images for evaluation.
             precision (torch.dtype): 
                 The precision to use for inference (e.g., torch.float32, torch.float16).
@@ -154,7 +183,7 @@ class CustomInferenceEncoder(BasePatchEncoder):
         self.eval_transforms = transforms
         self.precision = precision
         
-    def _build(self):
+    def _build(self) -> Tuple[None, None, None]:
         return None, None, None
 
 
@@ -549,12 +578,18 @@ class ResNet50InferenceEncoder(BasePatchEncoder):
         if weights_path:
             try:
                 model = timm.create_model("resnet50", pretrained=False, **timm_kwargs)
-                model.load_state_dict(torch.load(weights_path, map_location="cpu"), strict=False)
+                if weights_path.suffix == ".safetensors":
+                    from safetensors.torch import load_file
+                    state_dict = load_file(weights_path)
+                else:
+                    state_dict = torch.load(weights_path, map_location="cpu")
+                model.load_state_dict(state_dict, strict=False)
+
             except:
                 traceback.print_exc()
                 raise Exception(
                     f"Failed to create ResNet50 model from local checkpoint at '{weights_path}'. "
-                    "You can download the required `pytorch_model.bin` from: https://huggingface.co/timm/resnet50.tv_in1k."
+                    "You can download the required `pytorch_model.bin` or ` model.safetensors` from: https://huggingface.co/timm/resnet50.tv_in1k."
                 )
         else:
             self.ensure_has_internet(self.enc_name)
@@ -799,7 +834,7 @@ class GigaPathInferenceEncoder(BasePatchEncoder):
                 transforms.Normalize(mean, std),
             ]
         )
-        precision = torch.float32
+        precision = torch.float16
         return model, eval_transform, precision
 
     
@@ -1193,7 +1228,7 @@ class Midnight12kInferenceEncoder(BasePatchEncoder):
             ]
         )
 
-        precision = torch.float32
+        precision = torch.float16
         self.return_type = return_type
         return model, eval_transform, precision
 
@@ -1210,6 +1245,189 @@ class Midnight12kInferenceEncoder(BasePatchEncoder):
                 f"expected return_type to be one of 'cls_token' or 'cls+mean', but got '{self.return_type}'"
             )
 
+
+class H0MiniInferenceEncoder(BasePatchEncoder):
+
+    def __init__(self, **build_kwargs):
+        """
+        H0-mini initialization.
+        """
+        super().__init__(**build_kwargs)
+
+    def _build(self, return_type: Literal["cls_token", "cls+mean"] = "cls_token"):
+        import timm
+        from timm.data import resolve_model_data_config
+        from timm.data.transforms_factory import create_transform
+
+        self.enc_name = "h0-mini"
+        weights_path = self._get_weights_path()
+        self.return_type = return_type
+
+        if weights_path:
+            raise NotImplementedError(
+                "H0-mini currently supports loading from Hugging Face only. "
+                "Please leave `weights_path` unset."
+            )
+
+        self.ensure_has_internet(self.enc_name)
+        try:
+            model = timm.create_model(
+                "hf-hub:bioptimus/H0-mini",
+                pretrained=True,
+                mlp_layer=timm.layers.SwiGLUPacked,
+                act_layer=torch.nn.SiLU,
+            )
+        except Exception:
+            traceback.print_exc()
+            raise Exception(
+                "Failed to download H0-mini model, make sure that you were granted access "
+                "and that you correctly registered your token"
+            )
+
+        # timm>=0.9 expects the model instance directly here.
+        data_config = resolve_model_data_config(model)
+        eval_transform = create_transform(**data_config, is_training=False)
+        precision = torch.float16
+
+        return model, eval_transform, precision
+
+    def forward(self, x):
+        out = self.model(x)
+        if out.ndim != 3:
+            return out
+        cls_token = out[:, 0, :]
+        if self.return_type == "cls_token":
+            return cls_token
+        elif self.return_type == "cls+mean":
+            patch_embeddings = out[:, self.model.num_prefix_tokens:, :]
+            return torch.cat([cls_token, patch_embeddings.mean(1)], dim=-1)
+        else:
+            raise ValueError(
+                f"expected return_type to be one of 'cls_token' or 'cls+mean', but got '{self.return_type}'"
+            )
+
+
+class OpenMidnightInferenceEncoder(BasePatchEncoder):
+
+    def __init__(self, **build_kwargs):
+        """
+        OpenMidnight initialization.
+        """
+        super().__init__(**build_kwargs)
+
+    def _build(self):
+        from huggingface_hub import hf_hub_download
+        from torchvision import transforms
+
+        self.enc_name = "openmidnight"
+        weights_path = self._get_weights_path()
+
+        try:
+            model = torch.hub.load(
+                "facebookresearch/dinov2",
+                "dinov2_vitg14_reg",
+                pretrained=False,
+            )
+        except Exception:
+            traceback.print_exc()
+            raise Exception("Failed to initialize DINOv2 ViT-G/14 backbone for OpenMidnight.")
+
+        if not weights_path:
+            self.ensure_has_internet(self.enc_name)
+            try:
+                weights_path = hf_hub_download(
+                    repo_id="SophontAI/OpenMidnight",
+                    filename="teacher_checkpoint_load.pt",
+                )
+            except Exception:
+                traceback.print_exc()
+                raise Exception(
+                    "Failed to download OpenMidnight model, make sure that you were granted access "
+                    "and that you correctly registered your token"
+                )
+
+        try:
+            checkpoint = torch.load(weights_path, map_location="cpu", weights_only=False)
+            pos_embed = checkpoint["pos_embed"]
+            model.pos_embed = torch.nn.parameter.Parameter(pos_embed)
+            model.load_state_dict(checkpoint, strict=True)
+        except Exception:
+            traceback.print_exc()
+            raise Exception(
+                f"Failed to create OpenMidnight model from checkpoint at '{weights_path}'. "
+                "You can download the required `teacher_checkpoint_load.pt` from: "
+                "https://huggingface.co/SophontAI/OpenMidnight."
+            )
+
+        mean, std = get_constants("imagenet")
+        eval_transform = transforms.Compose(
+            [
+                transforms.Resize((224, 224)),
+                transforms.ToTensor(),
+                transforms.Normalize(mean=mean, std=std),
+            ]
+        )
+        precision = torch.float16
+        return model, eval_transform, precision
+
+    def forward(self, x):
+        return self.model(x)
+
+
+class GPFMInferenceEncoder(BasePatchEncoder):
+
+    def __init__(self, **build_kwargs):
+        """
+        GPFM initialization.
+        """
+        super().__init__(**build_kwargs)
+
+    def _build(self):
+        import timm
+        from huggingface_hub import hf_hub_download
+        from torchvision.transforms import InterpolationMode
+
+        self.enc_name = "gpfm"
+        weights_path = self._get_weights_path()
+
+        if not weights_path:
+            self.ensure_has_internet(self.enc_name)
+            try:
+                weights_path = hf_hub_download(repo_id="majiabo/GPFM", filename="GPFM.pth")
+            except Exception:
+                traceback.print_exc()
+                raise Exception("Failed to download GPFM model.")
+
+        try:
+            model = timm.create_model(
+                "vit_large_patch14_dinov2.lvd142m",
+                pretrained=False,
+                img_size=224,
+                init_values=1e-5,
+            )
+            state_dict = torch.load(weights_path, map_location="cpu", weights_only=False)
+            if isinstance(state_dict, dict) and "state_dict" in state_dict:
+                state_dict = state_dict["state_dict"]
+            model.load_state_dict(state_dict, strict=True)
+        except Exception:
+            traceback.print_exc()
+            raise Exception(
+                f"Failed to create GPFM model from checkpoint at '{weights_path}'. "
+                "You can download the required `GPFM.pth` from: https://huggingface.co/majiabo/GPFM."
+            )
+
+        mean, std = get_constants("imagenet")
+        eval_transform = get_eval_transforms(
+            mean,
+            std,
+            target_img_size=224,
+            interpolation=InterpolationMode.BICUBIC,
+            max_size=None,
+            antialias=True,
+        )
+        precision = torch.float16
+        return model, eval_transform, precision
+
 encoder_registry = {
     "conch_v1": Conchv1InferenceEncoder,
     "conch_v15": Conchv15InferenceEncoder,
@@ -1217,13 +1435,17 @@ encoder_registry = {
     "uni_v2": UNIv2InferenceEncoder,
     "ctranspath": CTransPathInferenceEncoder,
     "phikon": PhikonInferenceEncoder,
+    "phikon_v2": Phikonv2InferenceEncoder,
     "resnet50": ResNet50InferenceEncoder,
     "gigapath": GigaPathInferenceEncoder,
     "virchow": VirchowInferenceEncoder,
     "virchow2": Virchow2InferenceEncoder,
     "hoptimus0": HOptimus0InferenceEncoder,
     "hoptimus1": HOptimus1InferenceEncoder,
+    "h0-mini": H0MiniInferenceEncoder,
     "musk": MuskInferenceEncoder,
+    "openmidnight": OpenMidnightInferenceEncoder,
+    "gpfm": GPFMInferenceEncoder,
     "hibou_l": HibouLInferenceEncoder,
     "kaiko-vitb8": KaikoB8InferenceEncoder,
     "kaiko-vitb16": KaikoB16InferenceEncoder,
@@ -1231,4 +1453,5 @@ encoder_registry = {
     "kaiko-vits16": KaikoS16InferenceEncoder,
     "kaiko-vitl14": KaikoL14InferenceEncoder,
     "lunit-vits8": LunitS8InferenceEncoder,
+    "midnight12k": Midnight12kInferenceEncoder,
 }

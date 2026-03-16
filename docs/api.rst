@@ -3,6 +3,12 @@ API Reference
 
 This section documents the **public API** of TRIDENT. 
 
+When to use the API vs CLI:
+
+- Use the CLI (``run_batch_of_slides.py`` / ``trident batch``) for standard reproducible runs.
+- Use the API when embedding Trident in your own Python pipeline, custom loops, or experiments.
+- Start with the CLI first, then move to API once the workflow is validated.
+
 .. contents::
    :local:
    :depth: 2
@@ -87,6 +93,10 @@ Factory for loading patch-level encoder models.
      - 1536
      - ``--patch_encoder hoptimus1 --patch_size 224 --mag 20``
      - `bioptimus/H-optimus-1 <https://huggingface.co/bioptimus/H-optimus-1>`__
+  * - **H0-mini**
+    - 768/1536
+    - ``--patch_encoder h0-mini --patch_size 224 --mag 20``
+    - `bioptimus/H0-mini <https://huggingface.co/bioptimus/H0-mini>`__
    * - **MUSK**
      - 1024
      - ``--patch_encoder musk --patch_size 384 --mag 20``
@@ -95,6 +105,14 @@ Factory for loading patch-level encoder models.
      - 3072
      - ``--patch_encoder midnight12k --patch_size 224 --mag 20``
      - `kaiko-ai/midnight <https://huggingface.co/kaiko-ai/midnight>`__
+  * - **OpenMidnight**
+    - 1536
+    - ``--patch_encoder openmidnight --patch_size 224 --mag 20``
+    - `SophontAI/OpenMidnight <https://huggingface.co/SophontAI/OpenMidnight>`__
+  * - **GPFM**
+    - 1024
+    - ``--patch_encoder gpfm --patch_size 224 --mag 20``
+    - `majiabo/GPFM <https://huggingface.co/majiabo/GPFM>`__
    * - **Kaiko**
      - 384/768/1024
      - ``--patch_encoder kaiko-vit* --patch_size 256 --mag 20``

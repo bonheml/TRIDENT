@@ -9,15 +9,21 @@ python run_batch_of_slides.py --task all --wsi_dir output/wsis --job_dir output 
 import os
 import argparse
 import torch
+from typing import Any
 
 from trident import Processor 
 from trident.patch_encoder_models import encoder_registry as patch_encoder_registry
 from trident.slide_encoder_models import encoder_registry as slide_encoder_registry
 
 
-def build_parser():
+def build_parser() -> argparse.ArgumentParser:
     """
     Parse command-line arguments for the Trident processing script.
+
+    Returns
+    -------
+    argparse.ArgumentParser
+        Configured argument parser with all Trident processing options.
     """
     parser = argparse.ArgumentParser(description='Run Trident')
 
@@ -53,8 +59,8 @@ def build_parser():
                     help='Custom keys used to store the resolution as MPP (micron per pixel) in your list of whole-slide image.')
     parser.add_argument('--custom_list_of_wsis', type=str, default=None,
                     help='Custom list of WSIs specified in a csv file.')
-    parser.add_argument('--reader_type', type=str, choices=['openslide', 'image', 'cucim'], default=None,
-                    help='Force the use of a specific WSI image reader. Options are ["openslide", "image", "cucim"]. Defaults to None (auto-determine which reader to use).')
+    parser.add_argument('--reader_type', type=str, choices=['openslide', 'image', 'cucim', 'sdpc'], default=None,
+                    help='Force the use of a specific WSI image reader. Options are ["openslide", "image", "cucim", "sdpc"]. Defaults to None (auto-determine which reader to use).')
     parser.add_argument("--search_nested", action="store_true",
                         help=("If set, recursively search for whole-slide images (WSIs) within all subdirectories of "
                               "`wsi_source`. Uses `os.walk` to include slides from nested folders. "
@@ -62,8 +68,8 @@ def build_parser():
                               "Defaults to False (only top-level slides are included)."))
     # Segmentation arguments 
     parser.add_argument('--segmenter', type=str, default='hest', 
-                        choices=['hest', 'grandqc'], 
-                        help='Type of tissue vs background segmenter. Options are HEST or GrandQC.')
+                        choices=['hest', 'grandqc', 'otsu'],
+                        help='Type of tissue vs background segmenter. Options are HEST, GrandQC, or Otsu.')
     parser.add_argument('--seg_conf_thresh', type=float, default=0.5, 
                     help='Confidence threshold to apply to binarize segmentation predictions. Lower this threhsold to retain more tissue. Defaults to 0.5. Try 0.4 as 2nd option.')
     parser.add_argument('--remove_holes', action='store_true', default=False, 
@@ -76,8 +82,8 @@ def build_parser():
                         help='Batch size for segmentation. Defaults to None (use `batch_size` argument instead).')
     
     # Patching arguments
-    parser.add_argument('--mag', type=int, choices=[5, 10, 20, 40, 80], default=20, 
-                        help='Magnification for coords/features extraction.')
+    parser.add_argument('--mag', type=float, default=20.0,
+                        help='Magnification for coords/features extraction. Supports fractional values (e.g., 1.25x, 2.5x, 5x, etc.).')
     parser.add_argument('--patch_size', type=int, default=512, 
                         help='Patch size for coords/image extraction.')
     parser.add_argument('--overlap', type=int, default=0, 
@@ -109,7 +115,15 @@ def build_parser():
     return parser
 
 
-def parse_arguments():
+def parse_arguments() -> argparse.Namespace:
+    """
+    Parse command-line arguments and return the parsed namespace.
+
+    Returns
+    -------
+    argparse.Namespace
+        Parsed command-line arguments.
+    """
     return build_parser().parse_args()
 
 
@@ -117,16 +131,28 @@ def generate_help_text() -> str:
     """
     Generate the command-line help text for documentation purposes.
     
-    Returns:
-        str: The full help message string from the argument parser.
+    Returns
+    -------
+    str
+        The full help message string from the argument parser.
     """
     parser = build_parser()
     return parser.format_help()
 
 
-def initialize_processor(args):
+def initialize_processor(args: argparse.Namespace) -> Processor:
     """
     Initialize the Trident Processor with arguments set in `run_batch_of_slides`.
+
+    Parameters
+    ----------
+    args : argparse.Namespace
+        Parsed command-line arguments containing processor configuration.
+
+    Returns
+    -------
+    Processor
+        Initialized Trident Processor instance.
     """
     return Processor(
         job_dir=args.job_dir,
@@ -142,13 +168,22 @@ def initialize_processor(args):
     )
 
 
-def run_task(processor, args):
+def run_task(processor: Processor, args: argparse.Namespace) -> None:
     """
     Execute the specified task using the Trident Processor.
+
+    Parameters
+    ----------
+    processor : Processor
+        Initialized Trident Processor instance.
+    args : argparse.Namespace
+        Parsed command-line arguments containing task configuration.
     """
 
     if args.task == 'seg':
         from trident.segmentation_models.load import segmentation_model_factory
+
+        seg_device = "cpu" if args.segmenter == "otsu" else f"cuda:{args.gpu}"
 
         # instantiate segmentation model and artifact remover if requested by user
         segmentation_model = segmentation_model_factory(
@@ -170,7 +205,7 @@ def run_task(processor, args):
             holes_are_tissue= not args.remove_holes,
             artifact_remover_model=artifact_remover_model,
             batch_size=args.seg_batch_size if args.seg_batch_size is not None else args.batch_size,
-            device=f'cuda:{args.gpu}',
+            device=seg_device,
         )
     elif args.task == 'coords':
         processor.run_patching_job(
@@ -205,7 +240,14 @@ def run_task(processor, args):
         raise ValueError(f'Invalid task: {args.task}')
 
 
-def main():
+def main() -> None:
+    """
+    Main entry point for the Trident batch processing script.
+    
+    Handles both sequential and parallel processing modes based on whether
+    WSI caching is enabled. Supports segmentation, coordinate extraction,
+    and feature extraction tasks.
+    """
 
     args = parse_arguments()
     args.device = f'cuda:{args.gpu}' if torch.cuda.is_available() else 'cpu'
@@ -243,7 +285,7 @@ def main():
             local_args.search_nested = False
             return initialize_processor(local_args)
 
-        def run_task_fn(processor: Processor, task_name: str):
+        def run_task_fn(processor: Processor, task_name: str) -> None:
             args.task = task_name
             run_task(processor, args)
 

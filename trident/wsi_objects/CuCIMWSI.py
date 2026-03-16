@@ -1,14 +1,14 @@
 from __future__ import annotations
 import numpy as np
 from PIL import Image
-from typing import Tuple, Optional, Union
+from typing import Tuple, Optional, Union, Any
 
 from trident.wsi_objects.WSI import WSI, ReadMode
 
 
 class CuCIMWSI(WSI):
 
-    def __init__(self, slide_path, **kwargs) -> None:
+    def __init__(self, slide_path: str, **kwargs: Any) -> None:
         """
         Initialize a WSI instance using CuCIM as a backend.
 
@@ -22,8 +22,8 @@ class CuCIMWSI(WSI):
 
         Please refer to WSI constructor for all parameters. 
 
-        Example
-        -------
+        Examples
+        --------
         >>> wsi = CuCIMWSI(slide_path="path/to/wsi.svs", lazy_init=False)
         >>> print(wsi)
         <width=100000, height=80000, backend=CuCIMWSI, mpp=0.25, mag=40>
@@ -76,7 +76,7 @@ class CuCIMWSI(WSI):
                 "  cupy: https://docs.cupy.dev/en/stable/install.html"
             ) from e
 
-        if not self.lazy_init:
+        if not self._initialized:
             try:
                 self.img = CuImage(self.slide_path)
                 self.dimensions = (self.img.size()[1], self.img.size()[0])  # width, height are reverted compared to openslide!!
@@ -88,7 +88,7 @@ class CuCIMWSI(WSI):
                 if self.mpp is None:
                     self.mpp = self._fetch_mpp(self.custom_mpp_keys)
                 self.mag = self._fetch_magnification(self.custom_mpp_keys)
-                self.lazy_init = True
+                self._initialized = True
 
             except Exception as e:
                 raise RuntimeError(f"Failed to initialize WSI using CuCIM: {e}") from e
@@ -182,14 +182,14 @@ class CuCIMWSI(WSI):
         """
         Generate a thumbnail image of the WSI.
 
-        Args:
-        -----
+        Parameters
+        ----------
         size : tuple[int, int]
             A tuple specifying the desired width and height of the thumbnail.
 
-        Returns:
-        --------
-        Image.Image:
+        Returns
+        -------
+        Image.Image
             The thumbnail as a PIL Image in RGB format.
         """
         target_width, target_height = size
@@ -247,16 +247,24 @@ class CuCIMWSI(WSI):
         ValueError
             If `read_as` is not one of the supported options.
 
-        Example
-        -------
+        Examples
+        --------
         >>> region = wsi.read_region((1000, 1000), level=0, size=(512, 512), read_as='pil')
         >>> region.show()
         """
 
-        import cupy as cp
-
         region = self.img.read_region(location=location, level=level, size=size, device='cpu')
-        region = cp.asnumpy(region)  # Convert from CuPy to NumPy
+        # CuCIM returns NumPy arrays for CPU reads; keep a safe fallback
+        # for unexpected array types without hard-requiring CuPy.
+        if not isinstance(region, np.ndarray):
+            try:
+                import cupy as cp
+                if isinstance(region, cp.ndarray):
+                    region = cp.asnumpy(region)
+                else:
+                    region = np.asarray(region)
+            except ModuleNotFoundError:
+                region = np.asarray(region)
 
         if read_as == 'numpy':
             return region
@@ -269,12 +277,12 @@ class CuCIMWSI(WSI):
         """
         Return the (width, height) dimensions of the CuCIM-managed WSI.
 
-        Returns:
-        --------
-        Tuple[int, int]:
+        Returns
+        -------
+        Tuple[int, int]
             A tuple containing the width and height of the WSI in pixels.
 
-        Example:
+        Examples
         --------
         >>> wsi.get_dimensions()
         (100000, 80000)
@@ -310,4 +318,4 @@ class CuCIMWSI(WSI):
         if self.img is not None:
             self.img.close()
             self.img = None
-            self.lazy_init = False
+            self._initialized = False
