@@ -5,14 +5,8 @@ import torch
 import traceback
 from abc import abstractmethod
 from einops import rearrange
-<<<<<<< HEAD
-from typing import Optional, Tuple
 from trident.IO import get_weights_path, has_internet_connection
-=======
 from typing import Optional, Tuple, Dict, Any
-
-from trident.IO import get_weights_path
->>>>>>> upstream/main
 
 """
 This file contains 10+ pretrained slide encoders, all loadable via the encoder_factory() function.
