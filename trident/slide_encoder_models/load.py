@@ -64,15 +64,10 @@ slide_to_patch_encoder_name = {
 
 
 class BaseSlideEncoder(torch.nn.Module):
-<<<<<<< HEAD
 
     _has_internet = has_internet_connection()
 
     def __init__(self, weights_path: Optional[str] = None, freeze: bool = True, **build_kwargs: dict) -> None:
-=======
-    
-    def __init__(self, freeze: bool = True, **build_kwargs: Dict[str, Any]) -> None:
->>>>>>> upstream/main
         """
         Parent class for all pretrained slide encoders.
         """
