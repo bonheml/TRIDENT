@@ -11,7 +11,7 @@ import pandas as pd
 from trident import load_wsi, WSIReaderType
 from trident.IO import create_lock, remove_lock, is_locked, update_log, collect_valid_slides, splitext
 from trident.Maintenance import deprecated
-from trident.wsi_objects.WSIFactory import OPENSLIDE_EXTENSIONS, PIL_EXTENSIONS, SDPC_EXTENSIONS
+from trident.wsi_objects.WSIFactory import OPENSLIDE_EXTENSIONS, PIL_EXTENSIONS, SDPC_EXTENSIONS, OMEZARR_EXTENSIONS
 
 
 class Processor:
@@ -74,7 +74,7 @@ class Processor:
                 Maximum number of workers for data loading. If None, the default behavior will be used.
                 Defaults to None.
             reader_type (WSIReaderType, optional):
-                Force the image reader engine to use. Options are are ["openslide", "image", "cucim"]. Defaults to None
+                Force the image reader engine to use. Options are are ["openslide", "image", "cucim", "sdpc", "omezarr"]. Defaults to None
                 (auto-determine the right engine based on image extension).
             search_nested (bool, optional):  
                 If True, the processor will recursively search for WSIs within all subdirectories of `wsi_source`.
@@ -108,7 +108,7 @@ class Processor:
 
         self.job_dir = job_dir
         self.wsi_source = wsi_source
-        self.wsi_ext = wsi_ext or (list(PIL_EXTENSIONS) + list(OPENSLIDE_EXTENSIONS) + list(SDPC_EXTENSIONS))
+        self.wsi_ext = wsi_ext or (list(PIL_EXTENSIONS) + list(OPENSLIDE_EXTENSIONS) + list(SDPC_EXTENSIONS) + list(OMEZARR_EXTENSIONS))
         self.skip_errors = skip_errors
         self.custom_mpp_keys = custom_mpp_keys
         self.max_workers = max_workers
@@ -296,6 +296,10 @@ class Processor:
         saveto: str | None = None, 
         visualize: bool = True,
         min_tissue_proportion: float = 0.,
+        dump_patches: bool = False,
+        dump_patches_max: int = 0,
+        dump_patches_format: str = "png",
+        dump_patches_jpeg_quality: int = 90,
     ) -> str:
         """
         The `run_patching_job` function extracts patches from the segmented tissue regions of slides. 
@@ -310,12 +314,21 @@ class Processor:
             overlap (int, optional): 
                 The amount of overlap between adjacent patches, specified in pixels. Defaults to 0.
             saveto (str, optional): 
-                The directory where patch data and visualizations will be saved. If not provided, a directory 
-                name will be generated automatically. Defaults to None.
+                The directory where patch data and visualizations will be saved (relative to ``job_dir``). If not 
+                provided, a directory name will be generated automatically. Defaults to None.
             visualize (bool, optional): 
                 Whether to generate and save visualizations of the patches. Defaults to True.
-            min_tissue_proportion: float, optional 
+            min_tissue_proportion (float, optional): 
                 Minimum proportion of the patch under tissue to be kept. Defaults to 0. 
+            dump_patches (bool, optional): 
+                If True, also writes patch images to disk under ``<saveto>/patch_images/<slide_name>/`` for debugging. 
+                Defaults to False.
+            dump_patches_max (int, optional): 
+                Maximum number of patch images to write per slide (0 = no limit). Defaults to 0.
+            dump_patches_format (str, optional): 
+                Image format for dumped patches: ``png`` or ``jpg``. Defaults to ``png``.
+            dump_patches_jpeg_quality (int, optional): 
+                JPEG quality (1-100) when ``dump_patches_format`` is ``jpg``. Defaults to 90.
 
         Returns:
             str: Absolute path to directory containing patch coordinates.
@@ -389,6 +402,17 @@ class Processor:
                     overlap=overlap,
                     min_tissue_proportion=min_tissue_proportion,
                 )
+
+                # optionally dump patch images for debugging/inspection
+                if dump_patches:
+                    coords_fp = os.path.join(self.job_dir, saveto, 'patches', f'{wsi.name}_patches.h5')
+                    wsi.dump_patches(
+                        coords_path=coords_fp,
+                        save_patches_dir=os.path.join(self.job_dir, saveto, "patch_images"),
+                        max_patches=dump_patches_max,
+                        image_format=dump_patches_format,
+                        jpeg_quality=dump_patches_jpeg_quality,
+                    )
 
                 # save tissue coords visualization
                 if visualize:  

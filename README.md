@@ -40,6 +40,7 @@ This project was developed by the [Mahmood Lab](https://faisal.ai/) at Harvard M
 Optional install profiles:
 - `pip install -e ".[patch-encoders]"` for CONCH/MUSK/CTransPath-related extras.
 - `pip install -e ".[slide-encoders]"` for PRISM/GigaPath/Madeleine-related extras.
+- `pip install -e ".[omezarr]"` for OME Zarr WSI reader support
 - `pip install -e ".[convert]"` for slide conversion dependencies.
 - `pip install -e ".[full]"` to install all pip-installable optional dependencies.
 
@@ -156,6 +157,7 @@ Trident supports 24 patch encoders, loaded via a patch [`encoder_factory`](https
 | **Midnight-12k**      | 3072           | `--patch_encoder midnight12k --patch_size 224 --mag 20`          | [kaiko-ai/midnight](https://huggingface.co/kaiko-ai/midnight) |
 | **OpenMidnight**      | 1536           | `--patch_encoder openmidnight --patch_size 224 --mag 20`         | [SophontAI/OpenMidnight](https://huggingface.co/SophontAI/OpenMidnight) |
 | **GPFM**              | 1024           | `--patch_encoder gpfm --patch_size 224 --mag 20`                 | [majiabo/GPFM](https://huggingface.co/majiabo/GPFM) |
+| **GenBio-PathFM**     | 4608           | `--patch_encoder genbio-pathfm --patch_size 224 --mag 20`        | [genbio-ai/genbio-pathfm](https://huggingface.co/genbio-ai/genbio-pathfm) |
 | **Kaiko**             | 384/768/1024   | `--patch_encoder {kaiko-vits8, kaiko-vits16, kaiko-vitb8, kaiko-vitb16, kaiko-vitl14} --patch_size 256 --mag 20` | [1aurent/kaikoai-models-66636c99d8e1e34bc6dcf795](https://huggingface.co/collections/1aurent/kaikoai-models-66636c99d8e1e34bc6dcf795) |
 | **Lunit**             | 384            | `--patch_encoder lunit-vits8 --patch_size 224 --mag 20`          | [1aurent/vit_small_patch8_224.lunit_dino](https://huggingface.co/1aurent/vit_small_patch8_224.lunit_dino) |
 | **Hibou**             | 1024           | `--patch_encoder hibou_l --patch_size 224 --mag 20`              | [histai/hibou-L](https://huggingface.co/histai/hibou-L) |
@@ -231,7 +233,7 @@ main()
    - **A**: Yes using the `--custom_list_of_wsis` argument. Provide a list of WSI names in a CSV (with slide extension, `wsi`). Optionally, provide the mpp (field `mpp`)
  
  - **Q**: Do I need to install any additional packages to use Trident?
-   - **A**: `pip install -e .` installs core dependencies. Some optional components still require extra installs. Use profiles (`.[patch-encoders]`, `.[slide-encoders]`, `.[convert]`, or `.[full]`) and run `trident-doctor` for preflight checks.
+   - **A**: `pip install -e .` installs core dependencies. Some optional components still require extra installs. Use profiles (`.[patch-encoders]`, `.[slide-encoders]`, `.[convert]`, `.[omezarr]` or `.[full]`) and run `trident-doctor` for preflight checks.
 
 ## License and Terms of Use
 

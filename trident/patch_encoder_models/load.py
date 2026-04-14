@@ -20,10 +20,9 @@ def encoder_factory(model_name: str, **kwargs) -> torch.nn.Module:
     `model_name`. Each encoder is designed for extracting representations from image patches
     using specific backbones or pretraining strategies.
 
-    Parameters
-    ----------
-    model_name : str
-        Name of the encoder to instantiate. Must be one of the following:
+    Parameters:
+        model_name (str):
+            Name of the encoder to instantiate. Must be one of the following:
         - "conch_v1"
         - "conch_v15"
         - "uni_v1"
@@ -48,27 +47,24 @@ def encoder_factory(model_name: str, **kwargs) -> torch.nn.Module:
         - "kaiko-vits16"
         - "kaiko-vitl14"
         - "lunit-vits8"
+        - "genbio-pathfm"
 
-    **kwargs : dict
-        Optional keyword arguments passed directly to the encoder constructor. These
-        may include parameters such as:
+        **kwargs (dict):
+            Optional keyword arguments passed directly to the encoder constructor. These may include parameters such as:
         - weights_path (str): Path to a local checkpoint (optional)
         - normalize (bool): Whether to normalize output embeddings (default: False)
         - with_proj (bool): Whether to apply the projection head (default: True)
         - any model-specific configuration parameters
 
-    Returns
+    Returns:
+        torch.nn.Module: An instance of the specified encoder model.
+
+    Raises:
+        ValueError:
+            If `model_name` is not among the recognized encoder names.
+
+    Example
     -------
-    torch.nn.Module
-        An instance of the specified encoder model.
-
-    Raises
-    ------
-    ValueError
-        If `model_name` is not among the recognized encoder names.
-
-    Examples
-    --------
     >>> # Load a high-performance vision transformer
     >>> encoder = encoder_factory("conch_v15")
     >>> 
@@ -92,25 +88,24 @@ class BasePatchEncoder(torch.nn.Module):
         """
         Initialize BasePatchEncoder.
 
-        Parameters
-        ----------
-        weights_path : Optional[str]
-            Optional path to local model weights. If None, the model is loaded from the model registry or downloaded from Hugging Face Hub.
-        **build_kwargs : dict
-            Additional keyword arguments passed to the `_build()` method to customize model creation.
+        Parameters:
+            weights_path (Optional[str]):
+                Optional path to local model weights. If None, the model is loaded from the model registry or
+                downloaded from Hugging Face Hub.
+            **build_kwargs (dict):
+                Additional keyword arguments passed to the `_build()` method to customize model creation.
 
-        Attributes
-        ----------
-        enc_name : Optional[str]
-            Name of the encoder architecture (set during `_build()`).
-        weights_path : Optional[str]
-            Path to local model weights (if provided).
-        model : nn.Module
-            The instantiated encoder model.
-        eval_transforms : Callable
-            Evaluation-time preprocessing transforms.
-        precision : torch.dtype
-            Precision used for inference.
+        Attributes:
+            enc_name (Optional[str]):
+                Name of the encoder architecture (set during `_build()`).
+            weights_path (Optional[str]):
+                Path to local model weights (if provided).
+            model (nn.Module):
+                The instantiated encoder model.
+            eval_transforms (Callable):
+                Evaluation-time preprocessing transforms.
+            precision (torch.dtype):
+                Precision used for inference.
         """
 
         super().__init__()
@@ -166,15 +161,14 @@ class CustomInferenceEncoder(BasePatchEncoder):
         This class is used when the model, transforms, and precision are pre-instantiated externally 
         and should be injected directly into the encoder wrapper.
 
-        Parameters
-        ----------
-        enc_name : str
-            A unique name or identifier for the encoder (used for registry or logging).
-        model : torch.nn.Module
-            A PyTorch model instance to use for inference.
-        transforms : Callable 
+        Parameters:
+            enc_name (str):
+                A unique name or identifier for the encoder (used for registry or logging).
+            model (torch.nn.Module):
+                A PyTorch model instance to use for inference.
+            transforms (Callable):
                 A callable (e.g., torchvision or timm transform) to preprocess input images for evaluation.
-            precision (torch.dtype): 
+            precision (torch.dtype):
                 The precision to use for inference (e.g., torch.float32, torch.float16).
         """
         super().__init__()
@@ -1428,6 +1422,65 @@ class GPFMInferenceEncoder(BasePatchEncoder):
         precision = torch.float16
         return model, eval_transform, precision
 
+
+class GenBioPathFMInferenceEncoder(BasePatchEncoder):
+
+    def __init__(self, **build_kwargs):
+        """
+        GenBio-PathFM initialization.
+        """
+        super().__init__(**build_kwargs)
+
+    def _build(self):
+        from huggingface_hub import hf_hub_download
+        from torchvision.transforms import InterpolationMode
+        from trident.patch_encoder_models.model_zoo.genbio_pathfm.genbio_pathfm import GenBioPathFMInference
+
+        self.enc_name = "genbio-pathfm"
+        weights_path = self._get_weights_path()
+
+        if not weights_path:
+            self.ensure_has_internet(self.enc_name)
+            try:
+                weights_path = hf_hub_download(
+                    repo_id="genbio-ai/genbio-pathfm",
+                    filename="model.pth",
+                )
+            except:
+                traceback.print_exc()
+                raise Exception(
+                    "Failed to download GenBio-PathFM model. "
+                    "You can manually download 'model.pth' from: "
+                    "https://huggingface.co/genbio-ai/genbio-pathfm and set the path in local_ckpts.json."
+                )
+
+        try:
+            model = GenBioPathFMInference(weights_path, device="cpu")
+        except:
+            traceback.print_exc()
+            raise Exception(
+                f"Failed to create GenBio-PathFM model from local checkpoint at '{weights_path}'. "
+                "You can download the required 'model.pth' from: "
+                "https://huggingface.co/genbio-ai/genbio-pathfm."
+            )
+
+        mean, std = get_constants("genbio_pathfm")
+        eval_transform = get_eval_transforms(
+            mean,
+            std,
+            target_img_size=224,
+            interpolation=InterpolationMode.BILINEAR,
+            max_size=None,
+            antialias=True,
+        )
+
+        precision = torch.bfloat16
+        return model, eval_transform, precision
+
+    def forward(self, x):
+        return self.model(x)
+
+
 encoder_registry = {
     "conch_v1": Conchv1InferenceEncoder,
     "conch_v15": Conchv15InferenceEncoder,
@@ -1454,4 +1507,5 @@ encoder_registry = {
     "kaiko-vitl14": KaikoL14InferenceEncoder,
     "lunit-vits8": LunitS8InferenceEncoder,
     "midnight12k": Midnight12kInferenceEncoder,
+    "genbio-pathfm": GenBioPathFMInferenceEncoder,
 }

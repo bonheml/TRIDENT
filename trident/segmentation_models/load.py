@@ -17,26 +17,21 @@ class SegmentationModel(torch.nn.Module):
         """
         Initialize Segmentation model wrapper.
 
-        Parameters
-        ----------
-        freeze : bool, optional
-            If True, the model's parameters are frozen 
-            (i.e., not trainable) and the model is set to evaluation mode. 
-            Defaults to True.
-        confidence_thresh : float, optional
-            Threshold for prediction confidence. 
-            Predictions below this threshold may be filtered out or ignored. 
-            Default is 0.5. Set to 0.4 to keep more tissue.
-        **build_kwargs : dict
-            Additional keyword arguments passed to the internal 
-            `_build` method.
+        Parameters:
+            freeze (bool, optional):
+                If True, the model's parameters are frozen (i.e., not trainable) and the model is set to evaluation
+                mode. Defaults to True.
+            confidence_thresh (float, optional):
+                Threshold for prediction confidence. Predictions below this threshold may be filtered out or ignored.
+                Default is 0.5. Set to 0.4 to keep more tissue.
+            **build_kwargs (dict):
+                Additional keyword arguments passed to the internal `_build` method.
 
-        Attributes
-        ----------
-        model : torch.nn.Module
-            The constructed model.
-        eval_transforms : Callable
-            Transformations to apply to input data during inference.
+        Attributes:
+            model (torch.nn.Module):
+                The constructed model.
+            eval_transforms (Callable):
+                Transformations to apply to input data during inference.
         """
         super().__init__()
         self.model, self.eval_transforms = self._build(**build_kwargs)
@@ -75,10 +70,8 @@ class HESTSegmenter(SegmentationModel):
         """
         Build and load HESTSegmenter model.
 
-        Returns
-        -------
-        Tuple[nn.Module, transforms.Compose]
-            Model and preprocessing transforms.
+        Returns:
+            Tuple[nn.Module, transforms.Compose]: Model and preprocessing transforms.
         """
 
         from torchvision.models.segmentation import deeplabv3_resnet50
@@ -352,6 +345,46 @@ class GrandQCSegmenter(SegmentationModel):
         return predictions
 
 
+class OtsuSegmenter(SegmentationModel):
+    """
+    Classical image-processing tissue segmenter based on two-pass Otsu thresholding.
+    """
+
+    def __init__(self, **build_kwargs):
+        super().__init__(**build_kwargs)
+
+    def _build(self) -> Tuple[nn.Module, transforms.Compose]:
+        # Keep API aligned with other segmenters used by WSI._segment_semantic.
+        self.input_size = 512
+        self.precision = torch.float32
+        self.target_mag = 1.25
+        eval_transforms = transforms.Compose([transforms.ToTensor()])
+        return None, eval_transforms
+
+    def forward(self, image: torch.Tensor) -> torch.Tensor:
+        if image.ndim != 4:
+            raise ValueError(
+                f"Input must be 4D tensor (B, C, H, W), got shape={tuple(image.shape)}"
+            )
+
+        # Lazy import: only needed for the Otsu fallback segmenter.
+        import numpy as np
+        from trident.segmentation_models.model_zoo.otsu import apply_otsu_thresholding
+
+        preds = []
+        for i in range(image.shape[0]):
+            img_np = image[i].detach().permute(1, 2, 0).cpu().numpy()  # CHW -> HWC
+            img_np = np.clip(img_np * 255.0, 0, 255).astype(np.uint8)
+
+            # apply_otsu_thresholding returns background mask (1=background).
+            # TRIDENT expects tissue mask (1=tissue), so invert here.
+            background_mask = apply_otsu_thresholding(img_np)
+            tissue_mask = (1 - background_mask).astype(np.uint8)
+            preds.append(tissue_mask)
+
+        return torch.from_numpy(np.stack(preds, axis=0))
+
+
 def segmentation_model_factory(
     model_name: str, 
     confidence_thresh: float = 0.5, 
@@ -378,7 +411,6 @@ def segmentation_model_factory(
     elif model_name == 'grandqc_artifact':
         return GrandQCArtifactSegmenter(freeze=freeze, **build_kwargs)
     elif model_name == 'otsu':
-        from trident.segmentation_models.otsu import OtsuSegmenter
         return OtsuSegmenter(freeze=freeze, confidence_thresh=confidence_thresh, **build_kwargs)
     else:
         raise ValueError(f"Model type {model_name} not supported")

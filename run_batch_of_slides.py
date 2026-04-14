@@ -20,10 +20,8 @@ def build_parser() -> argparse.ArgumentParser:
     """
     Parse command-line arguments for the Trident processing script.
 
-    Returns
-    -------
-    argparse.ArgumentParser
-        Configured argument parser with all Trident processing options.
+    Returns:
+        argparse.ArgumentParser: Configured argument parser with all Trident processing options.
     """
     parser = argparse.ArgumentParser(description='Run Trident')
 
@@ -59,8 +57,8 @@ def build_parser() -> argparse.ArgumentParser:
                     help='Custom keys used to store the resolution as MPP (micron per pixel) in your list of whole-slide image.')
     parser.add_argument('--custom_list_of_wsis', type=str, default=None,
                     help='Custom list of WSIs specified in a csv file.')
-    parser.add_argument('--reader_type', type=str, choices=['openslide', 'image', 'cucim', 'sdpc'], default=None,
-                    help='Force the use of a specific WSI image reader. Options are ["openslide", "image", "cucim", "sdpc"]. Defaults to None (auto-determine which reader to use).')
+    parser.add_argument('--reader_type', type=str, choices=['openslide', 'image', 'cucim', 'sdpc', 'omezarr'], default=None,
+                    help='Force the use of a specific WSI image reader. Options are ["openslide", "image", "cucim", "sdpc", "omezarr"]. Defaults to None (auto-determine which reader to use).')
     parser.add_argument("--search_nested", action="store_true",
                         help=("If set, recursively search for whole-slide images (WSIs) within all subdirectories of "
                               "`wsi_source`. Uses `os.walk` to include slides from nested folders. "
@@ -92,6 +90,22 @@ def build_parser() -> argparse.ArgumentParser:
                         help='Minimum proportion of the patch under tissue to be kept. Between 0. and 1.0. Defaults to 0.')
     parser.add_argument('--coords_dir', type=str, default=None, 
                         help='Directory to save/restore tissue coordinates.')
+    parser.add_argument(
+        '--dump_patches', action='store_true', default=False,
+        help='During the coords task, also dump patch images (PNGs) to disk.'
+    )
+    parser.add_argument(
+        '--dump_patches_max', type=int, default=0,
+        help='Max number of patch images to dump per slide (0 = no limit).'
+    )
+    parser.add_argument(
+        '--dump_patches_format', type=str, default="png", choices=["png", "jpg"],
+        help='Patch image format to dump (png or jpg). Defaults to png.'
+    )
+    parser.add_argument(
+        '--dump_patches_jpeg_quality', type=int, default=90,
+        help='JPEG quality (1-100) when --dump_patches_format=jpg. Defaults to 90.'
+    )
     
     # Feature extraction arguments 
     parser.add_argument('--patch_encoder', type=str, default='conch_v15', 
@@ -119,10 +133,8 @@ def parse_arguments() -> argparse.Namespace:
     """
     Parse command-line arguments and return the parsed namespace.
 
-    Returns
-    -------
-    argparse.Namespace
-        Parsed command-line arguments.
+    Returns:
+        argparse.Namespace: Parsed command-line arguments.
     """
     return build_parser().parse_args()
 
@@ -131,10 +143,8 @@ def generate_help_text() -> str:
     """
     Generate the command-line help text for documentation purposes.
     
-    Returns
-    -------
-    str
-        The full help message string from the argument parser.
+    Returns:
+        str: The full help message string from the argument parser.
     """
     parser = build_parser()
     return parser.format_help()
@@ -144,15 +154,12 @@ def initialize_processor(args: argparse.Namespace) -> Processor:
     """
     Initialize the Trident Processor with arguments set in `run_batch_of_slides`.
 
-    Parameters
-    ----------
-    args : argparse.Namespace
-        Parsed command-line arguments containing processor configuration.
+    Parameters:
+        args (argparse.Namespace):
+            Parsed command-line arguments containing processor configuration.
 
-    Returns
-    -------
-    Processor
-        Initialized Trident Processor instance.
+    Returns:
+        Processor: Initialized Trident Processor instance.
     """
     return Processor(
         job_dir=args.job_dir,
@@ -172,12 +179,11 @@ def run_task(processor: Processor, args: argparse.Namespace) -> None:
     """
     Execute the specified task using the Trident Processor.
 
-    Parameters
-    ----------
-    processor : Processor
-        Initialized Trident Processor instance.
-    args : argparse.Namespace
-        Parsed command-line arguments containing task configuration.
+    Parameters:
+        processor (Processor):
+            Initialized Trident Processor instance.
+        args (argparse.Namespace):
+            Parsed command-line arguments containing task configuration.
     """
 
     if args.task == 'seg':
@@ -213,7 +219,11 @@ def run_task(processor: Processor, args: argparse.Namespace) -> None:
             patch_size=args.patch_size,
             overlap=args.overlap,
             saveto=args.coords_dir,
-            min_tissue_proportion=args.min_tissue_proportion
+            min_tissue_proportion=args.min_tissue_proportion,
+            dump_patches=args.dump_patches,
+            dump_patches_max=args.dump_patches_max,
+            dump_patches_format=args.dump_patches_format,
+            dump_patches_jpeg_quality=args.dump_patches_jpeg_quality,
         )
     elif args.task == 'feat':
         if args.slide_encoder is None: 
