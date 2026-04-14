@@ -80,7 +80,7 @@ def build_parser() -> argparse.ArgumentParser:
                         help='Batch size for segmentation. Defaults to None (use `batch_size` argument instead).')
     
     # Patching arguments
-    parser.add_argument('--mag', type=int, default=20,
+    parser.add_argument('--mag', type=float, default=20.0,
                         help='Magnification for coords/features extraction.')
     parser.add_argument('--patch_size', type=int, default=512, 
                         help='Patch size for coords/image extraction.')
