@@ -471,11 +471,8 @@ class TitanSlideEncoder(BaseSlideEncoder):
         return model, precision, embedding_dim
 
     def forward(self, batch, device='cuda'):
-        if type(batch['attributes']['patch_size_level0']) == torch.Tensor:
-                patch_level =  batch['attributes']['patch_size_level0'].to(dtype=torch.int64)
-        else:
-                patch_level =  batch['attributes']['patch_size_level0']
-        z = self.model.encode_slide_from_patch_features(batch['features'].to(device), batch['coords'].to(device), patch_level)        
+        type(batch['attributes']['patch_size_level0'])
+        z = self.model.encode_slide_from_patch_features(batch['features'].to(device), batch['coords'].to(device), int(batch['attributes']['patch_size_level0']))        
         return z
     
 class FeatherSlideEncoder(BaseSlideEncoder):
