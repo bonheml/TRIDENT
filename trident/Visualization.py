@@ -68,7 +68,7 @@ def apply_colormap(overlay: np.ndarray, cmap_name: str | dict) -> np.ndarray:
         cmap = plt.get_cmap(cmap_name)
         colored_valid = (cmap(overlay[valid_mask]) * 255).astype(np.uint8)[:, :3]
     else:
-        colored_valid = (np.array(overlay[valid_mask]) * 255).astype(np.uint8)[:, :3]
+        colored_valid = (cmap_name[overlay[valid_mask]] * 255).astype(np.uint8)[:, :3]
     overlay_colored[valid_mask] = colored_valid
     return overlay_colored
 
