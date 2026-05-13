@@ -49,23 +49,26 @@ def create_overlay(
     return overlay
 
 
-def apply_colormap(overlay: np.ndarray, cmap_name: str) -> np.ndarray:
+def apply_colormap(overlay: np.ndarray, cmap_name: str | dict) -> np.ndarray:
     """
     Apply a colormap to the heatmap overlay.
     
     Parameters:
         overlay (np.ndarray):
             Heatmap overlay.
-        cmap_name (str):
-            Colormap name.
+        cmap_name (str | dict):
+            Colormap name or a dict formatted as follows: {'value_name': (r,g,b,a)}
 
     Returns:
         np.ndarray: Colored overlay image.
     """
-    cmap = plt.get_cmap(cmap_name)
     overlay_colored = np.zeros((*overlay.shape, 3), dtype=np.uint8)
     valid_mask = ~np.isnan(overlay)
-    colored_valid = (cmap(overlay[valid_mask]) * 255).astype(np.uint8)[:, :3]
+    if type(cmap_name) == str:
+        cmap = plt.get_cmap(cmap_name)
+        colored_valid = (cmap(overlay[valid_mask]) * 255).astype(np.uint8)[:, :3]
+    else:
+        colored_valid = (overlay[valid_mask] * 255).astype(np.uint8)[:, :3]
     overlay_colored[valid_mask] = colored_valid
     return overlay_colored
 
@@ -76,13 +79,14 @@ def visualize_heatmap(
     coords: np.ndarray,
     patch_size_level0: int,
     vis_level: Optional[int] = 2,
-    cmap: str = 'coolwarm',
+    cmap: str | dict = 'coolwarm',
     normalize: bool = True,
     num_top_patches_to_save: int = -1,
     output_dir: Optional[str] = "output",
     vis_mag: Optional[int] = None,
     overlay_only: bool = False,
-    filename: str = 'heatmap.png'
+    filename: str = 'heatmap.png',
+    thumbnail_size: Optional[Tuple[int, int]] = None,
 ) -> str:
     """
     Generate a heatmap visualization overlayed on a whole slide image (WSI).
@@ -98,8 +102,8 @@ def visualize_heatmap(
             Patch size at level 0.
         vis_level (Optional[int]):
             Visualization level.
-        cmap (str):
-            Colormap to use for the heatmap.
+        cmap (str | dict):
+            Colormap name or a dict formatted as follows: {'value_name': (r,g,b,a)}
         normalize (bool):
             Whether to normalize the scores.
         num_top_patches_to_save (int):
@@ -150,6 +154,10 @@ def visualize_heatmap(
     os.makedirs(output_dir, exist_ok=True)
     heatmap_path = os.path.join(output_dir, filename)
     blended_img.save(heatmap_path)
+    if thumbnail_size is not None:
+        blended_img.thumbnail(thumbnail_size)
+        thumbnail_path = os.path.join(output_dir, f"thumbnail_{filename}")
+        blended_img.save(thumbnail_path)
 
     if num_top_patches_to_save > 0:
         topk_dir = os.path.join(output_dir, "topk_patches")
