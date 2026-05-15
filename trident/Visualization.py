@@ -39,8 +39,8 @@ def create_overlay(
     counter = np.zeros_like(overlay, dtype=np.uint16)
     
     for idx, coord in enumerate(coords):
-        overlay[coord[1]:coord[1] + patch_size[1], coord[0]:coord[0] + patch_size[0]] += scores[idx]
-        counter[coord[1]:coord[1] + patch_size[1], coord[0]:coord[0] + patch_size[0]] += 1
+        overlay[coord[1]:coord[1] + patch_size[1], coord[0]:coord[0] + patch_size[0]] = scores[idx]
+        counter[coord[1]:coord[1] + patch_size[1], coord[0]:coord[0] + patch_size[0]] = 1
     
     zero_mask = counter == 0
     overlay[~zero_mask] /= counter[~zero_mask]
