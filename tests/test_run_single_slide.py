@@ -1,7 +1,7 @@
 import unittest
 from unittest.mock import MagicMock, patch
 
-import run_single_slide as single_mod
+from trident.bin import run_single_slide as single_mod
 
 
 class _SlideContext:

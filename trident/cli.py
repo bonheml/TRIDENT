@@ -56,14 +56,14 @@ def main() -> None:
         forwarded = parsed.args[1:] if parsed.args and parsed.args[0] == "--" else parsed.args
 
     if parsed.command == "batch":
-        from run_batch_of_slides import main as batch_main
+        from trident.bin.run_batch_of_slides import main as batch_main
 
         sys.argv = ["run_batch_of_slides", *forwarded]
         batch_main()
         return
 
     if parsed.command == "single":
-        from run_single_slide import main as single_main
+        from trident.bin.run_single_slide import main as single_main
 
         sys.argv = ["run_single_slide", *forwarded]
         single_main()

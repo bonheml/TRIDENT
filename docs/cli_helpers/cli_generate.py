@@ -5,7 +5,7 @@ import os
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../../')))
 
-from run_batch_of_slides import generate_help_text
+from trident.bin.run_batch_of_slides import generate_help_text
 
 
 if __name__ == "__main__":

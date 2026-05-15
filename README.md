@@ -211,8 +211,8 @@ Please see our [tutorials](https://github.com/mahmoodlab/trident/tree/main/tutor
   - **A**: Make sure `trident` is installed using `pip install -e .`. Then, both scripts are exposed and can be integrated into any Python code, e.g., as
 
 ```python
-import sys 
-from run_single_slide import main
+import sys
+from trident.bin.run_single_slide import main
 
 sys.argv = [
     "run_single_slide",

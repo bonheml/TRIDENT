@@ -98,8 +98,8 @@ omezarr = [
 
 [tool.poetry.scripts]
 trident = "trident.cli:main"
-run_batch_of_slides = "run_batch_of_slides:main"
-run_single_slide = "run_single_slide:main"
+run_batch_of_slides = "trident.bin.run_batch_of_slides:main"
+run_single_slide = "trident.bin.run_single_slide:main"
 trident-doctor = "trident.cli_doctor:main"
 
 [build-system]

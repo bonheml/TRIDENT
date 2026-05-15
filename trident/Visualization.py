@@ -57,7 +57,7 @@ def apply_colormap(overlay: np.ndarray, cmap_name: str | dict) -> np.ndarray:
         overlay (np.ndarray):
             Heatmap overlay.
         cmap_name (str | dict):
-            Colormap name or a dict formatted as follows: {'value_name': (r,g,b,a)}
+            Colormap name or a dict formatted as follows: {<numeric_value>: (r,g,b,a)}
 
     Returns:
         np.ndarray: Colored overlay image.

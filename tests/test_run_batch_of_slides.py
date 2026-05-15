@@ -1,7 +1,7 @@
 import unittest
 from unittest.mock import patch
 
-import run_batch_of_slides as batch_mod
+from trident.bin import run_batch_of_slides as batch_mod
 
 
 class _DummySegmentationModel:
